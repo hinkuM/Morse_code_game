@@ -1,0 +1,72 @@
+:root {
+   --radius: 0.4rem;
+
+   --background: black;
+   --border: grey;
+   --foreground-light: white;
+   --foreground-dark: black;
+   --primary: rgb(207, 207, 207);
+   --secondary: rgb(163, 163, 163);
+}
+
+*,
+*::after,
+*::before {
+   box-sizing: border-box;
+}
+
+body {
+   margin: 0;
+   background-color: var(--background);
+   height: 100vh;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+}
+
+main {
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   gap: 50px;
+}
+
+.room {
+   width: 150px;
+   height: 200px;
+   position: relative;
+   border: 1px solid var(--border);
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: space-between;
+   padding: 25px;
+   border-radius: var(--radius);
+}
+
+.room-name {
+   position: absolute;
+   top: -50px;
+   color: var(--foreground-light);
+   font-weight: bold;
+   font-size: 26px;
+}
+
+.room-title {
+   color: var(--foreground-light);
+   font-size: 20px;
+}
+
+.room-btn {
+   border-radius: var(--radius);
+   border: 1px solid var(--border);
+   height: 30px;
+   width: 100%;
+   background-color: var(--primary);
+   color: var(--foreground-dark);
+   cursor: pointer;
+}
+
+.room-btn:hover {
+   filter: brightness(90%);
+}
