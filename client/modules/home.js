@@ -22,8 +22,8 @@ function createRoomMenu(roomNumber) {
    container.append(roomName, roomTitle)
 
    const buttons = [
-      { text: "Sender" },
-      { text: "Receiver" }
+      { text: "Sender", role: "sender" },
+      { text: "Receiver", role: "receiver" }
    ]
 
    for (let i = 0; i < buttons.length; i++) {
@@ -32,9 +32,30 @@ function createRoomMenu(roomNumber) {
 
       btn.innerText = data.text
       btn.classList.add("room-btn")
+      btn.addEventListener("click", () => {
+         joinRoom(roomNumber, data.role)
+      })
       container.append(btn)
    }
 
    container.append(empty)
    return container
+}
+
+function joinRoom(roomNumber, role) {
+   $.ajax({
+      url: "/room/join",
+      type: "POST",
+      data: {
+         roomNumber,
+         role
+      },
+      success: function (result) {
+         console.log(result);
+      },
+      error: function (result, err) {
+         console.log(result, err);
+
+      }
+   });
 }
