@@ -61,7 +61,7 @@ function showSlotsStatus(rooms) {
 
 function joinRoom(roomNumber, role) {
    $.ajax({
-      url: "/room/join",
+      url: "/join",
       type: "POST",
       data: {
          roomNumber,
@@ -69,6 +69,9 @@ function joinRoom(roomNumber, role) {
       },
       success: function (result) {
          console.log(result);
+         if (result.data != undefined) {
+            window.location.href = result.data.redirect
+         }
          roomInfo()
       },
       error: function (result, err) {
@@ -80,7 +83,7 @@ function joinRoom(roomNumber, role) {
 
 function roomInfo() {
    $.ajax({
-      url: "/room/info",
+      url: "/info",
       type: "POST",
       success: function (result) {
          showSlotsStatus(result.data)

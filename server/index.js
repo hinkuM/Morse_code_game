@@ -34,16 +34,45 @@ app.use(session({
 const numberOfRooms = 4
 const rooms = new Map()
 const users = new Map()
+const correctSentence = "Hello me explode fast us".replace(/ /g, '').toLowerCase()
 
 for (let i = 0; i < numberOfRooms; i++) {
     rooms.set("room" + i, { sender: undefined, receiver: undefined })
+}
+
+function checkPlayer(req, res, next) {
+    console.log(rooms, users);
+    next()
 }
 
 app.get("/", (req, res, next) => {
     res.sendFile("home.html", { root: path.join(__serverFiles, "../client/views") })
 })
 
-app.post("/room/info", (req, res, next) => {
+app.get("/room", checkPlayer, (req, res, next) => {
+    res.sendFile("roomSender.html", { root: path.join(__serverFiles, "../client/views") })
+})
+
+app.post("/room/verify", (req, res, next) => {
+    const { letter, index } = req.body
+    if (isNaN(index)) {
+        return res.status(400).json({ code: "index is non a number" })
+    }
+    if (parseInt(index) < 0 || parseInt(index) > correctSentence.length) {
+        return res.status(400).json({ code: "index is not in range" })
+    }
+    if (!isNaN(letter)) {
+        return res.status(400).json({ code: "letter is a number" })
+    }
+    console.log(correctSentence[index], letter, index);
+
+    if (correctSentence[index] == letter.toLowerCase()) {
+        return res.status(200).json({ code: "ok" })
+    }
+    return res.status(400).json({ code: "wrong" })
+})
+
+app.post("/info", (req, res, next) => {
     const takenSlots = []
     rooms.forEach((value, key) => {
         takenSlots.push({ sender: (value.sender === undefined) ? false : true, receiver: (value.receiver === undefined) ? false : true })
@@ -52,7 +81,7 @@ app.post("/room/info", (req, res, next) => {
 })
 
 
-app.post("/room/join", (req, res, next) => {
+app.post("/join", (req, res, next) => {
     const { roomNumber, role } = req.body
 
     if (isNaN(roomNumber)) {
@@ -85,6 +114,10 @@ app.post("/room/join", (req, res, next) => {
         rooms.set("room" + roomNumber, { sender: roomData.sender, receiver: req.session.id })
     }
     console.log(rooms, users);
+
+    if (roomData.receiver != undefined || roomData.sender != undefined) {
+        return res.status(200).json({ code: "ok", data: { redirect: "/room" } })
+    }
     return res.status(200).json({ code: "ok" })
 })
 

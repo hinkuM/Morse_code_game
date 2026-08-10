@@ -1,30 +1,4 @@
-:root {
-   --radius: 0.4rem;
-
-   --background: black;
-   --border: grey;
-   --foreground-light: white;
-   --foreground-dark: black;
-   --primary: rgb(207, 207, 207);
-   --secondary: rgb(163, 163, 163);
-   --green: rgb(0, 112, 0);
-   --grey: grey;
-}
-
-*,
-*::after,
-*::before {
-   box-sizing: border-box;
-}
-
-body {
-   margin: 0;
-   background-color: var(--background);
-   height: 100vh;
-   display: flex;
-   justify-content: center;
-   align-items: center;
-}
+@import "./css.css";
 
 main {
    display: flex;

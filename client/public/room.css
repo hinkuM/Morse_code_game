@@ -1,0 +1,86 @@
+@import "./css.css";
+
+body {
+   display: grid;
+   grid-template-columns: 350px calc(100% - 700px) 350px;
+   grid-template-rows: 100px auto 250px;
+}
+
+header {
+   height: 100%;
+   width: 100%;
+   grid-row: 1;
+   grid-column-start: 1;
+   grid-column-end: 4;
+   border: 1px solid blue;
+}
+
+aside {
+   height: 100%;
+   width: 100%;
+   grid-row: 2;
+   border: 1px solid green;
+}
+
+main {
+   height: 100%;
+   width: 100%;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   flex-direction: column;
+   gap: 40px;
+   padding: 20px;
+   grid-row: 2;
+   grid-column: 2;
+   border: 1px solid red;
+}
+
+footer {
+   height: 100%;
+   width: 100%;
+   border: 1px solid yellow;
+   grid-row: 3;
+   grid-column-start: 1;
+   grid-column-end: 4;
+}
+
+.word {
+   display: flex;
+   flex-direction: row;
+   gap: 20px;
+}
+
+.placeholder {
+   width: 50px;
+   height: 70px;
+   border: 2px solid var(--border);
+   background-color: transparent;
+   caret-color: var(--white);
+   color: var(--foreground-light);
+   font-size: 38px;
+   text-align: center;
+   outline: none;
+   cursor: default;
+}
+
+.hover {
+   background-color: var(--surface);
+}
+
+.ready {
+   border-color: var(--white);
+}
+
+.correct {
+   border-color: var(--green);
+}
+
+.incorrect {
+   border-color: var(--red);
+}
+
+.active {
+   border-color: var(--orange);
+   background-color: var(--surface);
+}
