@@ -43,11 +43,17 @@ app.get("/", (req, res, next) => {
     res.sendFile("home.html", { root: path.join(__serverFiles, "../client/views") })
 })
 
+app.post("/room/info", (req, res, next) => {
+    const takenSlots = []
+    rooms.forEach((value, key) => {
+        takenSlots.push({ sender: (value.sender === undefined) ? false : true, receiver: (value.receiver === undefined) ? false : true })
+    })
+    return res.status(200).json({ code: "ok", data: takenSlots })
+})
+
 
 app.post("/room/join", (req, res, next) => {
     const { roomNumber, role } = req.body
-    console.log(req.body);
-
 
     if (isNaN(roomNumber)) {
         return res.status(400).json({ code: "roomNumber is non a number" })

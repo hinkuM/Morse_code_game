@@ -5,6 +5,7 @@ window.addEventListener("load", () => {
       const menu = createRoomMenu(i);
       document.querySelector("main").append(menu)
    }
+   roomInfo()
 })
 
 function createRoomMenu(roomNumber) {
@@ -32,7 +33,10 @@ function createRoomMenu(roomNumber) {
 
       btn.innerText = data.text
       btn.classList.add("room-btn")
+      btn.setAttribute("id", data.role)
       btn.addEventListener("click", () => {
+         btn.classList.add("taken")
+         btn.classList.remove("free")
          joinRoom(roomNumber, data.role)
       })
       container.append(btn)
@@ -40,6 +44,19 @@ function createRoomMenu(roomNumber) {
 
    container.append(empty)
    return container
+}
+
+function showSlotsStatus(rooms) {
+   const containers = document.querySelectorAll(".room")
+   for (let i = 0; i < containers.length; i++) {
+      const roomContainer = containers[i];
+      const senderDiv = roomContainer.querySelector("#sender")
+      const receiverDiv = roomContainer.querySelector("#receiver")
+      senderDiv.classList.remove("taken", "free")
+      receiverDiv.classList.remove("taken", "free")
+      senderDiv.classList.add((rooms[i].sender) ? "taken" : "free")
+      receiverDiv.classList.add((rooms[i].receiver) ? "taken" : "free")
+   }
 }
 
 function joinRoom(roomNumber, role) {
@@ -52,10 +69,24 @@ function joinRoom(roomNumber, role) {
       },
       success: function (result) {
          console.log(result);
+         roomInfo()
       },
       error: function (result, err) {
          console.log(result, err);
+         roomInfo()
+      }
+   });
+}
 
+function roomInfo() {
+   $.ajax({
+      url: "/room/info",
+      type: "POST",
+      success: function (result) {
+         showSlotsStatus(result.data)
+      },
+      error: function (result, err) {
+         console.log(result, err);
       }
    });
 }

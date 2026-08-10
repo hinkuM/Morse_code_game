@@ -7,6 +7,8 @@
    --foreground-dark: black;
    --primary: rgb(207, 207, 207);
    --secondary: rgb(163, 163, 163);
+   --green: rgb(0, 112, 0);
+   --grey: grey;
 }
 
 *,
@@ -62,11 +64,19 @@ main {
    border: 1px solid var(--border);
    height: 30px;
    width: 100%;
-   background-color: var(--primary);
-   color: var(--foreground-dark);
    cursor: pointer;
+   color: var(--foreground-light);
 }
 
 .room-btn:hover {
    filter: brightness(90%);
+}
+
+.taken {
+   cursor: not-allowed;
+   background-color: var(--grey);
+}
+
+.free {
+   background-color: var(--green);
 }
