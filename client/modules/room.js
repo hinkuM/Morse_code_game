@@ -3,11 +3,7 @@ let currentGuessIndex = 0
 let lastGuess = ''
 const words = [5, 2, 7, 4, 2]
 
-for (let i = 0; i < words.length; i++) {
-   const letterAmount = words[i];
-   createPlaceholders(letterAmount, i)
 
-}
 
 class rulesManager {
    constructor() {
@@ -26,8 +22,29 @@ class rulesManager {
    }
 }
 
+class gameData {
+   constructor() {
+      this.startTime
+      this.wordsGuessed
+
+   }
+
+
+}
+
+function pointCounter() {
+
+}
 
 const rules = new rulesManager()
+
+
+for (let i = 0; i < words.length; i++) {
+   const letterAmount = words[i];
+   createPlaceholders(letterAmount, i)
+}
+const allPlaceholders = document.querySelectorAll(".placeholder")
+
 
 function createPlaceholders(letterAmount, index) {
    const container = document.createElement("section")
@@ -61,7 +78,7 @@ function createPlaceholders(letterAmount, index) {
       })
       placeholder.addEventListener("input", () => {
          lastGuess = placeholder.value[placeholder.value.length - 1]
-         placeholder.value = lastGuess.toUpperCase()
+         placeholder.value = lastGuess != undefined ? lastGuess.toUpperCase() : ""
          verifyGuess(placeholder)
       })
       container.append(placeholder)
@@ -72,6 +89,9 @@ function createPlaceholders(letterAmount, index) {
 
 function verifyGuess(container) {
    const letter = container.value
+   if (letter === undefined || letter.length <= 0) {
+      return
+   }
 
    $.ajax({
       url: "/room/verify",
@@ -81,14 +101,15 @@ function verifyGuess(container) {
          index: currentGuessIndex
       },
       success: function (result) {
-         console.log(result);
          currentGuessIndex++
          container.classList.remove("incorrect")
          container.classList.add("correct")
          container.blur()
+         if (currentGuessIndex < allPlaceholders.length) {
+            allPlaceholders[currentGuessIndex].focus()
+         }
       },
       error: function (result, err) {
-         console.log(result);
          container.classList.add("incorrect")
       }
    });
