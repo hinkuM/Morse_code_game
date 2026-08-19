@@ -143,3 +143,5 @@ vite.config.ts.timestamp-*
 .vite/
 
 TODO
+python.md
+react.md

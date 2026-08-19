@@ -66,6 +66,7 @@ footer {
 
 .hover {
    background-color: var(--surface);
+   cursor: pointer;
 }
 
 .ready {
@@ -76,11 +77,11 @@ footer {
    border-color: var(--green);
 }
 
-.incorrect {
-   border-color: var(--red);
-}
-
 .active {
    border-color: var(--orange);
    background-color: var(--surface);
+}
+
+.incorrect {
+   border-color: var(--red);
 }

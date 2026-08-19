@@ -14,6 +14,7 @@ import nocache from "nocache";
 const app = express();
 const __serverFiles = import.meta.dirname;
 const PORT = 3000;
+const API_BASE = "/api"
 
 app.use(nocache());
 app.use(express.json());
@@ -45,15 +46,17 @@ function checkPlayer(req, res, next) {
     next()
 }
 
-app.get("/", (req, res, next) => {
-    res.sendFile("home.html", { root: path.join(__serverFiles, "../client/views") })
-})
+// app.get("/", (req, res, next) => {
+//     console.log("test");
+//     res.sendFile("home.html", { root: path.join(__serverFiles, "../client/views") })
+// })
 
-app.get("/room", checkPlayer, (req, res, next) => {
-    res.sendFile("roomSender.html", { root: path.join(__serverFiles, "../client/views") })
-})
+// app.get("/room", checkPlayer, (req, res, next) => {
+//     console.log("test");
+//     res.sendFile("roomSender.html", { root: path.join(__serverFiles, "../client/views") })
+// })
 
-app.post("/room/verify", (req, res, next) => {
+app.post(`${API_BASE}/room/verify`, (req, res, next) => {
     const { letter, index } = req.body
     if (isNaN(index)) {
         return res.status(400).json({ code: "index is non a number" })
@@ -72,7 +75,7 @@ app.post("/room/verify", (req, res, next) => {
     return res.status(400).json({ code: "wrong" })
 })
 
-app.post("/info", (req, res, next) => {
+app.post(`${API_BASE}/info`, (req, res, next) => {
     const takenSlots = []
     rooms.forEach((value, key) => {
         takenSlots.push({ sender: (value.sender === undefined) ? false : true, receiver: (value.receiver === undefined) ? false : true })
@@ -81,7 +84,7 @@ app.post("/info", (req, res, next) => {
 })
 
 
-app.post("/join", (req, res, next) => {
+app.post(`${API_BASE}/join`, (req, res, next) => {
     const { roomNumber, role } = req.body
 
     if (isNaN(roomNumber)) {
@@ -108,17 +111,16 @@ app.post("/join", (req, res, next) => {
     if (role === "receiver" && roomData.receiver !== undefined) {
         return res.status(400).json({ code: "Receiver slot already taken" })
     }
+    console.log(rooms, users, roomData);
+    let fullRoom = false
     if (role === "sender") {
         rooms.set("room" + roomNumber, { sender: req.session.id, receiver: roomData.receiver })
+        if (roomData.receiver != undefined) fullRoom = true
     } else if (role === "receiver") {
         rooms.set("room" + roomNumber, { sender: roomData.sender, receiver: req.session.id })
+        if (roomData.sender != undefined) fullRoom = true
     }
-    console.log(rooms, users);
-
-    if (roomData.receiver != undefined || roomData.sender != undefined) {
-        return res.status(200).json({ code: "ok", data: { redirect: "/room" } })
-    }
-    return res.status(200).json({ code: "ok" })
+    return res.status(200).json({ code: "ok", data: { redirect: (fullRoom === true ? "/room" : "/waiting") } })
 })
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
