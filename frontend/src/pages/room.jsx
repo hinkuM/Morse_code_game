@@ -1,5 +1,5 @@
+import styles from '../styles/room.module.css'
 import { useState, useEffect } from "react";
-import '../styles/room.css'
 import LetterPlaceholder from "../components/letterPlaceholder";
 import VerifyGuess from "../api/verifyGuess";
 
@@ -28,16 +28,26 @@ function Room() {
       return result
    }
    return (
-      words.map((wordLength, index) => (
-         <LetterPlaceholder
-            key={index}
-            wordLength={wordLength}
-            wordIndex={index}
-            currentLetterIndex={currentLetterIndex}
-            onLetterInput={onLetterInput}
-         />
-      ))
+      <>
+         <div id={styles.all}>
+            <header id={styles.header}></header>
+            <aside id={styles.aside}></aside>
+            <main id={styles.main}>
+               {words.map((wordLength, index) => (
+                  <LetterPlaceholder
+                     key={index}
+                     wordLength={wordLength}
+                     wordIndex={index}
+                     currentLetterIndex={currentLetterIndex}
+                     onLetterInput={onLetterInput}
+                  />
+               ))}
+            </main>
+            <aside id={styles.aside}></aside>
+            <footer id={styles.footer}></footer>
+         </div>
 
+      </>
    );
 }
 

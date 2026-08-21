@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import '../styles/lobby.css'
-import CreateRoomContainer from "../components/roomContainer.jsx"
+import styles from "../styles/lobby.module.css"
+import LobbyBlock from "../components/lobbyBlock.jsx"
 import GetRoomInfo from '../api/roomInfo.jsx';
 
 function Lobby() {
@@ -13,15 +13,18 @@ function Lobby() {
   function fetchRoomInfo() {
     GetRoomInfo()
       .then((data) => {
-        setRooms(data);
+        setRooms(Object.values(data));
       })
       .catch((err) => console.log(err));
   }
 
   return (
-    rooms.map((room, index) => (
-      <CreateRoomContainer key={index} roomNumber={index} room={room} />
-    ))
+    <main id={styles.main}>
+      {rooms.map((room, index) => (
+        <LobbyBlock key={index} roomNumber={index} room={room} />
+      ))}
+    </main>
+
   );
 }
 

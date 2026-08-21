@@ -1,3 +1,4 @@
+import styles from "../styles/letterPlaceholder.module.css"
 import { useState } from "react";
 
 function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetterInput }) {
@@ -47,20 +48,18 @@ function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetter
    }
 
    return (
-      <section id={"word" + wordIndex} className={"word"}>
+      <section id={"word" + wordIndex} className={styles.word}>
          {Array.from({ length: wordLength }, (_, letterIndex) => (
             <input
                key={letterIndex}
                maxLength={2}
                className={
                   `
-                  placeholder
-                  ${wordIndex}
-                  ${letterIndex}
-                  ${hoverIndex === letterIndex ? "hover" : ""}
-                  ${activeIndex === letterIndex ? "active" : ""}
-                  ${currentLetterIndex.letter === letterIndex && currentLetterIndex.word === wordIndex && guessResult === false ? "incorrect" : ""}
-                  ${(currentLetterIndex.letter > letterIndex && currentLetterIndex.word === wordIndex) || currentLetterIndex.word > wordIndex ? "correct" : ""}
+                  ${styles.placeholder}
+                  ${hoverIndex === letterIndex ? styles.hover : ""}
+                  ${activeIndex === letterIndex ? styles.active : ""}
+                  ${currentLetterIndex.letter === letterIndex && currentLetterIndex.word === wordIndex && guessResult === false ? styles.incorrect : ""}
+                  ${(currentLetterIndex.letter > letterIndex && currentLetterIndex.word === wordIndex) || currentLetterIndex.word > wordIndex ? styles.correct : ""}
                   `
                }
                onMouseEnter={() => handleMouseEnter(wordIndex, letterIndex)}

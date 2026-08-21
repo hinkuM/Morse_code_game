@@ -7,8 +7,8 @@ import Wait from "./pages/wait.jsx";
 function App() {
    return (
       <Routes>
-         {/* <Route path="/" element={<Lobby />} /> */}
-         <Route path="/" element={<Room />} />
+         <Route path="/" element={<Lobby />} />
+         <Route path="/room" element={<Room />} />
          <Route path="/waiting" element={<Wait />} />
       </Routes>
    );

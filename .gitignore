@@ -142,6 +142,11 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+
+__pycache__/
+*.pyc
+
 TODO
 python.md
 react.md
+test.py

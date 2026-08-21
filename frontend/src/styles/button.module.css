@@ -1,0 +1,21 @@
+.btn {
+   border-radius: var(--radius);
+   border: 1px solid var(--border);
+   height: 30px;
+   width: 100%;
+   cursor: pointer;
+   color: var(--foreground-light);
+}
+
+.btn:hover {
+   filter: brightness(90%);
+}
+
+.taken {
+   cursor: not-allowed;
+   background-color: var(--grey);
+}
+
+.free {
+   background-color: var(--green);
+}

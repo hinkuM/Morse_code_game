@@ -1,12 +1,11 @@
-@import "./css.css";
-
-body {
+#all {
+   height: 100vh;
    display: grid;
    grid-template-columns: 350px calc(100% - 700px) 350px;
    grid-template-rows: 100px auto 250px;
 }
 
-header {
+#header {
    height: 100%;
    width: 100%;
    grid-row: 1;
@@ -15,14 +14,14 @@ header {
    border: 1px solid blue;
 }
 
-aside {
+#aside {
    height: 100%;
    width: 100%;
    grid-row: 2;
    border: 1px solid green;
 }
 
-main {
+#main {
    height: 100%;
    width: 100%;
    display: flex;
@@ -36,52 +35,11 @@ main {
    border: 1px solid red;
 }
 
-footer {
+#footer {
    height: 100%;
    width: 100%;
    border: 1px solid yellow;
    grid-row: 3;
    grid-column-start: 1;
    grid-column-end: 4;
-}
-
-.word {
-   display: flex;
-   flex-direction: row;
-   gap: 20px;
-}
-
-.placeholder {
-   width: 50px;
-   height: 70px;
-   border: 2px solid var(--border);
-   background-color: transparent;
-   caret-color: var(--white);
-   color: var(--foreground-light);
-   font-size: 38px;
-   text-align: center;
-   outline: none;
-   cursor: default;
-}
-
-.hover {
-   background-color: var(--surface);
-   cursor: pointer;
-}
-
-.ready {
-   border-color: var(--white);
-}
-
-.correct {
-   border-color: var(--green);
-}
-
-.active {
-   border-color: var(--orange);
-   background-color: var(--surface);
-}
-
-.incorrect {
-   border-color: var(--red);
 }
