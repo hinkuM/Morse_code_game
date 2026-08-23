@@ -13,7 +13,7 @@ function Lobby() {
   function fetchRoomInfo() {
     GetRoomInfo()
       .then((data) => {
-        setRooms(Object.values(data));
+        setRooms(data);
       })
       .catch((err) => console.log(err));
   }
