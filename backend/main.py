@@ -3,6 +3,7 @@
 import os
 import uuid
 import sqlite3
+from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from fastapi import FastAPI, HTTPException, Request, Depends
 from pydantic import BaseModel
@@ -55,6 +56,7 @@ def create_database_tables():
          CREATE TABLE IF NOT EXISTS {ROOMS_DB} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
+            last_join_time DATETIME DEFAULT CURRENT_TIMESTAMP,
             game_started INTEGER DEFAULT 0
          )
       ''')
@@ -71,7 +73,7 @@ def create_database_tables():
       conn.commit()
       for i in range(NUMBER_OF_ROOMS):
          cursor.execute(
-            "INSERT OR REPLACE INTO rooms(id, name) VALUES (?, ?)",
+            f"INSERT OR REPLACE INTO {ROOMS_DB}(id, name) VALUES (?, ?)",
             [i, f"hello{i}"]
          )
       conn.commit()
@@ -80,6 +82,57 @@ def create_database_tables():
       raise
    finally:
       conn.close()
+
+def clean_rooms():
+    conn = sqlite3.connect('game.db')
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f'''
+            DELETE FROM {PLAYERS_DB}
+            WHERE room_id IN (
+                SELECT id FROM {ROOMS_DB}
+                WHERE last_join_time < datetime('now', '-10 minutes')
+                  AND game_started = 0
+            )
+        ''')
+        cursor.execute(f'''
+            DELETE FROM {ROOMS_DB}
+            WHERE last_join_time < datetime('now', '-10 minutes')
+              AND game_started = 0
+        ''')
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+def player_leave(user_session_id):
+   conn = sqlite3.connect('game.db')
+   try:
+      cursor = conn.cursor()
+      cursor.execute(f'''
+         UPDATE {ROOMS_DB}
+         SET last_join_time = CURRENT_TIMESTAMP, game_started = 0
+         WHERE id IN (
+            SELECT room_id FROM {PLAYERS_DB}
+            WHERE player_id = ?
+         )
+      ''', (user_session_id,))
+      cursor.execute(
+         f"DELETE FROM {PLAYERS_DB} WHERE player_id = ?",
+         (user_session_id,)
+      )
+      conn.commit()
+   except Exception:
+      conn.rollback()
+      raise
+   finally:
+      conn.close()
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(clean_rooms, 'interval', minutes=5)
+scheduler.start()
 
 create_database_tables()
 
@@ -97,6 +150,10 @@ def ensure_session(request: Request):
       players_attempts_tracker.setdefault(user_session_id, {"user_attempts": 0, "user_last_attempt": None})
    return request.session["user_session_id"]
 
+
+@app.post(f"{API_BASE}/auth")
+def authorization(request: Request, user_session_id=Depends(check_session)):
+    return {"user_session_id": user_session_id}
 
 @app.post(f"{API_BASE}/info", status_code=200)
 def room_info(request: Request, user_session_id=Depends(ensure_session), conn: sqlite3.Connection = Depends(get_db_access)):
@@ -141,9 +198,6 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
 
    cursor.execute(f"SELECT role FROM {PLAYERS_DB} WHERE room_id = (?)", (body.roomNumber,))
    player_data = cursor.fetchone()
-   print(player_data)
-   print(body.role.value)
-   print(Role.receiver.value)
 
    if player_data is not None:
       if player_data["role"] == body.role.value:
@@ -194,14 +248,8 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
 
 
 
-# @app.post(f"{API_BASE}/room/leave", status_code=200)
-# def leave_room( request: Request, user_session_id=Depends(check_session)):
-#    user_data = players.get(user_session_id)
-
-#    if user_data is not None:
-#       rooms[f"""room{user_data["room"]}"""][user_data["role"]] = None
-#    if players.get(user_session_id) is not None:
-#       del players[user_session_id]
-
-#    request.session["user_session_id"] = str(uuid.uuid4())
-#    return { "code": "ok" }
+@app.post(f"{API_BASE}/leave", status_code=200)
+def leave_room( request: Request, user_session_id=Depends(check_session)):
+   player_leave(user_session_id)
+   request.session["user_session_id"] = str(uuid.uuid4())
+   return { "code": "ok" }
