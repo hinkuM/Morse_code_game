@@ -6,7 +6,6 @@ async function Authorization({ setUser, setLoading }) {
       method: "POST",
    });
    const result = await res.json();
-   console.log(result);
 
    if (!res.ok) {
       setUser(null)

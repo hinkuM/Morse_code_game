@@ -21,7 +21,12 @@ app.add_middleware(SessionMiddleware, secret_key=ENV_VARIABLES["SESSION_SECRET"]
 
 # GLOBAL VARIABLES
 API_BASE = "/api"
-CORRECT_SENTENCE = "Hello me explode fast uś".replace(" ", '').lower()
+SENTENCES = [
+   "I love testing python code".lower(),
+   "Hello me explode fast us".lower(),
+   "This IS working".lower(),
+   "Cosmic theme game mhm".lower()
+]
 NUMBER_OF_ROOMS = 4
 BASE_TIMEOUT_IN_SECONDS = 1
 MAX_TIMEOUT_ATTEMPTS = 5
@@ -36,17 +41,17 @@ players_attempts_tracker = {}
 
 # SQL 
 def get_db_access():
-    conn = sqlite3.connect('game.db')
+    conn = sqlite3.connect('game.db', check_same_thread=False)
     try:
       conn.execute("PRAGMA foreign_keys = ON")
       conn.row_factory = sqlite3.Row
       yield conn
       conn.commit()
     except Exception:
-        conn.rollback()
-        raise
+      conn.rollback()
+      raise
     finally:
-        conn.close()
+      conn.close()
 
 def create_database_tables():
    conn = sqlite3.connect('game.db')
@@ -67,6 +72,7 @@ def create_database_tables():
             role TEXT NOT NULL,
             correct_guesses INTEGER DEFAULT 0,
             wrong_guesses INTEGER DEFAULT 0,
+            sentence TEXT NOT NULL,
             FOREIGN KEY (room_id) REFERENCES {ROOMS_DB}(id)
          )
       ''')
@@ -136,10 +142,25 @@ scheduler.start()
 
 create_database_tables()
 
-def check_session(request: Request):
+# TEST
+conn = sqlite3.connect('game.db')
+cursor = conn.cursor()
+cursor.execute(f"SELECT * FROM {PLAYERS_DB}")
+print(cursor.fetchall())
+cursor.execute(f"SELECT * FROM {ROOMS_DB}")
+print(cursor.fetchall())
+
+
+def check_session(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):
    user_session_id = request.session.get("user_session_id")
    if user_session_id is None:
       raise HTTPException(status_code=400, detail="User has no session ID")
+   cursor = conn.cursor()
+   cursor.execute(f"SELECT * FROM {PLAYERS_DB} WHERE player_id = (?)", (user_session_id,))
+   player_data = cursor.fetchone()
+
+   if player_data is None:
+      raise HTTPException(status_code=400, detail="User is not in game")
    return user_session_id
 
 
@@ -152,8 +173,8 @@ def ensure_session(request: Request):
 
 
 @app.post(f"{API_BASE}/auth")
-def authorization(request: Request, user_session_id=Depends(check_session)):
-    return {"user_session_id": user_session_id}
+def authorization(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   return {"user_session_id": user_session_id}
 
 @app.post(f"{API_BASE}/info", status_code=200)
 def room_info(request: Request, user_session_id=Depends(ensure_session), conn: sqlite3.Connection = Depends(get_db_access)):
@@ -203,7 +224,9 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
       if player_data["role"] == body.role.value:
          raise HTTPException(status_code=400, detail=f"{body.role.value} slot already taken")
 
-   cursor.execute(f"INSERT INTO {PLAYERS_DB}('player_id', 'room_id', 'role') VALUES (?, ?, ?)", (user_session_id, body.roomNumber, body.role.value))
+   cursor.execute(f"INSERT INTO {PLAYERS_DB}('player_id', 'room_id', 'role', 'sentence') VALUES (?, ?, ?, ?)", (user_session_id, body.roomNumber, body.role.value, SENTENCES[body.roomNumber]))
+   request.session["user_session_role"] = body.role.value
+   request.session["user_session_room"] = body.roomNumber
 
    redirect = "/waiting"
    cursor.execute(f"SELECT COUNT(player_id) AS player_count FROM {PLAYERS_DB} WHERE room_id = (?)", (body.roomNumber,))
@@ -216,6 +239,19 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
    return { "code": "ok", "data": {"redirect": redirect} }
 
 
+
+
+@app.post(f"{API_BASE}/room/role", status_code=200)
+def verify_guess(request: Request, user_session_id=Depends(check_session)):
+   return { "code": "ok", "data": request.session["user_session_role"] }
+
+
+
+@app.post(f"{API_BASE}/room/sentence", status_code=200)
+def verify_guess(request: Request, user_session_id=Depends(check_session)):
+   return { "code": "ok", "data": SENTENCES[request.session["user_session_room"]] }
+
+
  
 class Guess(BaseModel):
    letter: str
@@ -224,10 +260,11 @@ class Guess(BaseModel):
 @app.post(f"{API_BASE}/room/verify", status_code=200)
 def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_session)):
    print(body.letter, body.index)
-   if body.index < 0 or body.index >= len(CORRECT_SENTENCE):
+   user_room = request.session["user_session_room"]
+   if body.index < 0 or body.index >= len(SENTENCES[user_room]):
       raise HTTPException(status_code=400, detail="Index is not in range")
    
-   print(CORRECT_SENTENCE[body.index], body.letter.lower())
+   print(SENTENCES[user_room][body.index], body.letter.lower())
 
    if request.session["user_last_attempt"] is not None: 
       time_passed = time.time() - request.session["user_last_attempt"]
@@ -235,7 +272,7 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
       if time_passed < current_timeout:
          raise HTTPException(status_code=429, detail="slow down")
 
-   if CORRECT_SENTENCE[body.index] != body.letter.lower():
+   if SENTENCES[user_room][body.index] != body.letter.lower():
       if request.session["user_attempts"] < MAX_TIMEOUT_ATTEMPTS:
          request.session["user_attempts"] += 1
       request.session["user_last_attempt"] = time.time()
@@ -252,4 +289,6 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
 def leave_room( request: Request, user_session_id=Depends(check_session)):
    player_leave(user_session_id)
    request.session["user_session_id"] = str(uuid.uuid4())
+   request.session["user_session_role"] = None
+   request.session["user_session_room"] = None
    return { "code": "ok" }
