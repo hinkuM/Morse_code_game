@@ -46,13 +46,14 @@
 
 #translationtable {
    box-sizing: content-box;
+   position: relative;
    display: flex;
    flex-direction: column;
    flex-wrap: wrap;
-   width: 380px;
-   height: 600px;
+   width: 375px;
+   height: calc(600px - 12px);
    position: absolute;
-   top: calc(50% - 300px);
+   top: calc(50% - 300px - 6px);
    bottom: 0;
    right: 0;
    border: 2px solid var(--border-light);
@@ -62,19 +63,39 @@
    color: var(--foreground-light);
 }
 
+#translationcover {
+   position: absolute;
+   display: flex;
+   width: inherit;
+   height: inherit;
+   background-color: var(--background);
+   opacity: 0.6;
+   z-index: 1;
+}
+
+#translationcover.hidden {
+   display: none;
+}
+
 .translationblock {
    display: flex;
    flex-direction: row;
    width: 125px;
    height: 50px;
    border: 1px solid var(--border);
-   border-color: var(--border);
-   border-bottom: none;
-   border-right: none;
+   margin-top: -1px;
+   margin-left: -1px;
+   background-color: var(--background);
 }
+
 
 .translationblock.number {
    border-color: var(--orange);
+}
+
+.translationblock.hint {
+   border-color: var(--green);
+   z-index: 2;
 }
 
 .translationblock .letter {
@@ -98,7 +119,7 @@
    justify-content: center;
    align-items: center;
    margin: auto;
-   width: 60vw;
+   width: 40vw;
    height: 120px;
    border: 2px solid var(--border-light);
    border-radius: var(--radius);

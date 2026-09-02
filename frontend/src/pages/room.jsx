@@ -161,10 +161,51 @@ function RoomSender({ morseTranslation, wordsLength }) {
       function handleKeyUp(e) {
          e.preventDefault()
          transmitting = false
-         if (Date.now() - time > 200) {
-            console.log("Dash");
+         const inputBar = document.getElementById(`${styles.inputbar}`)
+         if (inputBar.innerText === "Zacznij nadawać") {
+            if (e.code === "Space") {
+               inputBar.innerText = ""
+            } else {
+               return
+            }
+         } else if (inputBar.innerText.length === 0) {
+            for (const node of document.getElementById(`${styles.translationtable}`).children) {
+               node.classList.remove(`${styles.hint}`)
+            }
+            return inputBar.innerText = "Zacznij nadawać"
+         }
+         if (e.code === "Backspace") {
+            inputBar.innerText = inputBar.innerText.slice(0, -2)
+            if (inputBar.innerText.length === 0) {
+               document.getElementById(`${styles.translationcover}`).classList.add(`${styles.hidden}`)
+               for (const node of document.getElementById(`${styles.translationtable}`).children) {
+                  node.classList.remove(`${styles.hint}`)
+               }
+               return inputBar.innerText = "Zacznij nadawać"
+            }
+         }
+         if (inputBar.innerText.length >= 9 && inputBar.innerText != "Zacznij nadawać") {
+            return
+         }
+         if (e.code === "Space") {
+            if (Date.now() - time > 200) {
+               inputBar.innerText += " ᠆"
+            } else {
+               inputBar.innerText += " •"
+            }
+         }
+         const allMatches = morseTranslation.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) === inputBar.innerText.trim())
+         const allCounterMatches = morseTranslation.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) != inputBar.innerText.trim())
+         for (const id of allCounterMatches) {
+            document.getElementById(id.letter).classList.remove(`${styles.hint}`)
+         }
+         for (const id of allMatches) {
+            document.getElementById(id.letter).classList.add(`${styles.hint}`)
+         }
+         if (allMatches.length > 0) {
+            document.getElementById(`${styles.translationcover}`).classList.remove(`${styles.hidden}`)
          } else {
-            console.log("Dot");
+            document.getElementById(`${styles.translationcover}`).classList.add(`${styles.hidden}`)
          }
       }
 
@@ -218,8 +259,9 @@ function RoomSender({ morseTranslation, wordsLength }) {
             </main>
             <aside id={styles.aside}>
                <section id={styles.translationtable}>
+                  <div id={styles.translationcover} className={styles.hidden}></div>
                   {morseTranslation.map((block, index) => (
-                     <div className={`
+                     <div id={block.letter} className={`
                      ${styles.translationblock}
                      ${block.number ? styles.number : ""}
                      `}>
