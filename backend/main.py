@@ -27,6 +27,7 @@ SENTENCES = [
    "This IS working".lower(),
    "Cosmic theme game mhm".lower()
 ]
+SENTENCES_TRIMED = [sentence.replace(" ", "") for sentence in SENTENCES]
 NUMBER_OF_ROOMS = 4
 BASE_TIMEOUT_IN_SECONDS = 1
 MAX_TIMEOUT_ATTEMPTS = 5
@@ -37,7 +38,7 @@ PLAYERS_DB = "players"
 
 
 # SERVER DATA
-players_attempts_tracker = {}
+players_attempts_tracker = dict()
 
 # SQL 
 def get_db_access():
@@ -149,6 +150,7 @@ cursor.execute(f"SELECT * FROM {PLAYERS_DB}")
 print(cursor.fetchall())
 cursor.execute(f"SELECT * FROM {ROOMS_DB}")
 print(cursor.fetchall())
+print(players_attempts_tracker)
 
 
 def check_session(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):
@@ -224,7 +226,7 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
       if player_data["role"] == body.role.value:
          raise HTTPException(status_code=400, detail=f"{body.role.value} slot already taken")
 
-   cursor.execute(f"INSERT INTO {PLAYERS_DB}('player_id', 'room_id', 'role', 'sentence') VALUES (?, ?, ?, ?)", (user_session_id, body.roomNumber, body.role.value, SENTENCES[body.roomNumber]))
+   cursor.execute(f"INSERT INTO {PLAYERS_DB}('player_id', 'room_id', 'role', 'sentence') VALUES (?, ?, ?, ?)", (user_session_id, body.roomNumber, body.role.value, SENTENCES_TRIMED[body.roomNumber]))
    request.session["user_session_role"] = body.role.value
    request.session["user_session_room"] = body.roomNumber
 
@@ -257,29 +259,38 @@ class Guess(BaseModel):
    letter: str
    index: int
 
+
 @app.post(f"{API_BASE}/room/verify", status_code=200)
 def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_session)):
-   print(body.letter, body.index)
    user_room = request.session["user_session_room"]
-   if body.index < 0 or body.index >= len(SENTENCES[user_room]):
+
+   if players_attempts_tracker.get(user_session_id) is None:
+      players_attempts_tracker.setdefault(user_session_id, {"user_attempts": 0, "user_last_attempt": None})   
+
+   if body.index < 0 or body.index >= len(SENTENCES_TRIMED[user_room]):
       raise HTTPException(status_code=400, detail="Index is not in range")
    
-   print(SENTENCES[user_room][body.index], body.letter.lower())
+   tracker = players_attempts_tracker.get(user_session_id)
+   last_attempt = tracker["user_last_attempt"]
+   attempts = tracker["user_attempts"]
 
-   if request.session["user_last_attempt"] is not None: 
-      time_passed = time.time() - request.session["user_last_attempt"]
-      current_timeout = request.session["user_attempts"] * BASE_TIMEOUT_IN_SECONDS
+   print(body.letter, body.index)
+   print(SENTENCES_TRIMED[user_room][body.index], body.letter.lower())
+
+   if last_attempt is not None: 
+      time_passed = time.time() - last_attempt
+      current_timeout = attempts * BASE_TIMEOUT_IN_SECONDS
       if time_passed < current_timeout:
          raise HTTPException(status_code=429, detail="slow down")
 
-   if SENTENCES[user_room][body.index] != body.letter.lower():
-      if request.session["user_attempts"] < MAX_TIMEOUT_ATTEMPTS:
-         request.session["user_attempts"] += 1
-      request.session["user_last_attempt"] = time.time()
+   if SENTENCES_TRIMED[user_room][body.index] != body.letter.lower():
+      if attempts < MAX_TIMEOUT_ATTEMPTS:
+         tracker["user_attempts"] = attempts + 1
+      tracker["user_last_attempt"] = time.time()
       raise HTTPException(status_code=400, detail="wrong letter")
    
-   request.session["user_attempts"] = 0
-   request.session["user_last_attempt"] = None
+   tracker["user_attempts"] = 0
+   tracker["user_last_attempt"] = None
    return { "code": "ok" }
 
 
