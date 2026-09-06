@@ -1,12 +1,15 @@
 import styles from "../styles/letterPlaceholder.module.css"
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetterInput }) {
+function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetterInput, word = null }) {
    const [hoverIndex, changeHoverIndex] = useState(null);
-   const [activeIndex, changeActiveIndex] = useState(null);
    const [guessResult, changeGuessResult] = useState(null)
 
+
    function handleMouseEnter(wordIndex, letterIndex) {
+      if (word) {
+         return
+      }
       if (currentLetterIndex.letter != letterIndex || currentLetterIndex.word != wordIndex) {
          return
       }
@@ -19,10 +22,6 @@ function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetter
       if (currentLetterIndex.letter != letterIndex || currentLetterIndex.word != wordIndex) {
          return e.target.blur()
       }
-      changeActiveIndex(letterIndex)
-   }
-   function handleBlur() {
-      changeActiveIndex(null)
    }
 
    async function handleInput(e, wordIndex, letterIndex) {
@@ -35,12 +34,16 @@ function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetter
       if (value.length > 1) {
          e.target.value = letter
       }
+
       console.log(currentLetterIndex);
       if (!currentLetterIndex.ready) {
          return console.log("inactive");
       }
+
       const result = await onLetterInput({ letter, wordIndex, letterIndex })
       changeGuessResult(result ? null : false)
+      console.log(result);
+
       if (result) {
          e.target.blur()
          document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
@@ -56,8 +59,8 @@ function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetter
                className={
                   `
                   ${styles.placeholder}
-                  ${hoverIndex === letterIndex ? styles.hover : ""}
-                  ${activeIndex === letterIndex ? styles.active : ""}
+                  ${(hoverIndex === letterIndex && !word) ? styles.hover : ""}
+                   ${(currentLetterIndex.letter === letterIndex && currentLetterIndex.word === wordIndex) ? styles.active : ""}
                   ${currentLetterIndex.letter === letterIndex && currentLetterIndex.word === wordIndex && guessResult === false ? styles.incorrect : ""}
                   ${(currentLetterIndex.letter > letterIndex && currentLetterIndex.word === wordIndex) || currentLetterIndex.word > wordIndex ? styles.correct : ""}
                   `
@@ -65,8 +68,8 @@ function LetterPlaceholder({ wordLength, wordIndex, currentLetterIndex, onLetter
                onMouseEnter={() => handleMouseEnter(wordIndex, letterIndex)}
                onMouseLeave={handleMouseLeave}
                onFocus={(e) => handleFocus(e, wordIndex, letterIndex)}
-               onBlur={handleBlur}
                onInput={(e) => handleInput(e, wordIndex, letterIndex)}
+               placeholder={word ? word[letterIndex].toUpperCase() : ""}
             />
          ))}
       </section>

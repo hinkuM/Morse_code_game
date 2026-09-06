@@ -32,7 +32,7 @@
 
 .active {
    border-color: var(--orange);
-   background-color: var(--surface);
+   /* background-color: var(--surface); */
 }
 
 .incorrect {

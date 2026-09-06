@@ -1,24 +1,5 @@
 # uvicorn main:app --reload
 
-import os
-import uuid
-import sqlite3
-from apscheduler.schedulers.background import BackgroundScheduler
-import time
-from fastapi import FastAPI, HTTPException, Request, Depends
-from pydantic import BaseModel
-from starlette.middleware.sessions import SessionMiddleware
-from enum import Enum
-from dotenv import load_dotenv
-
-# ENV
-load_dotenv()
-ENV_VARIABLES = os.environ 
-
-# ENDPOINT AND SESSION
-app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=ENV_VARIABLES["SESSION_SECRET"])
-
 # GLOBAL VARIABLES
 API_BASE = "/api"
 SENTENCES = [
@@ -34,8 +15,30 @@ MAX_TIMEOUT_ATTEMPTS = 5
 ROOMS_DB = "rooms"
 ROLES_DB = "roles"
 PLAYERS_DB = "players"
+FRONTEND = "../frontend/new"
 
 
+import os
+import uuid
+import sqlite3
+from apscheduler.schedulers.background import BackgroundScheduler
+import time
+from fastapi import FastAPI, HTTPException, Request, Depends
+from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
+from enum import Enum
+from dotenv import load_dotenv
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+# ENV
+load_dotenv()
+ENV_VARIABLES = os.environ 
+
+# ENDPOINT AND SESSION
+app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key=ENV_VARIABLES["SESSION_SECRET"])
+app.mount("/assets", StaticFiles(directory=FRONTEND), name="assets")
 
 # SERVER DATA
 players_attempts_tracker = dict()
@@ -143,14 +146,9 @@ scheduler.start()
 
 create_database_tables()
 
-# TEST
-conn = sqlite3.connect('game.db')
-cursor = conn.cursor()
-cursor.execute(f"SELECT * FROM {PLAYERS_DB}")
-print(cursor.fetchall())
-cursor.execute(f"SELECT * FROM {ROOMS_DB}")
-print(cursor.fetchall())
-print(players_attempts_tracker)
+
+
+
 
 
 def check_session(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):
@@ -174,11 +172,26 @@ def ensure_session(request: Request):
    return request.session["user_session_id"]
 
 
-@app.post(f"{API_BASE}/auth")
+@app.get("/")
+def index():
+    return FileResponse(f"{FRONTEND}/home.html")
+
+
+@app.get("/leave")
+def leave_room( request: Request, user_session_id=Depends(check_session)):
+   player_leave(user_session_id)
+   request.session["user_session_id"] = str(uuid.uuid4())
+   request.session["user_session_role"] = None
+   request.session["user_session_room"] = None
+   return { "code": "REDIRECT", "data": "/" }
+
+
+
+@app.post("/auth")
 def authorization(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    return {"user_session_id": user_session_id}
 
-@app.post(f"{API_BASE}/info", status_code=200)
+@app.post("/info", status_code=200)
 def room_info(request: Request, user_session_id=Depends(ensure_session), conn: sqlite3.Connection = Depends(get_db_access)):
    rooms = [{Role.sender.value: False, Role.receiver.value: False} for i in range(NUMBER_OF_ROOMS)]
    cursor = conn.cursor()
@@ -198,7 +211,7 @@ class Join(BaseModel):
     roomNumber: int
     role: Role
 
-@app.post(f"{API_BASE}/join", status_code=200)
+@app.post("/join", status_code=200)
 def join_room(body: Join, request: Request, user_session_id=Depends(ensure_session), conn: sqlite3.Connection = Depends(get_db_access)):
    if body.roomNumber < 0 or body.roomNumber > NUMBER_OF_ROOMS - 1:
       raise HTTPException(status_code=400, detail="roomNumber is not in range")
@@ -214,7 +227,6 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
 
    cursor.execute(f"SELECT game_started FROM {ROOMS_DB} WHERE id = (?)", (body.roomNumber,))
    room_data = cursor.fetchone()
-
    if room_data["game_started"] == 1:
       # TODO redirect to specific room
       raise HTTPException(status_code=400, detail="Game has already started")
@@ -238,18 +250,18 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
       cursor.execute(f"UPDATE {ROOMS_DB} SET game_started=1 WHERE id = (?)", (body.roomNumber,))
       redirect = "/room"
 
-   return { "code": "ok", "data": {"redirect": redirect} }
+   return { "code": "REDIRECT", "data": redirect }
 
 
 
 
-@app.post(f"{API_BASE}/room/role", status_code=200)
+@app.post("/room/role", status_code=200)
 def verify_guess(request: Request, user_session_id=Depends(check_session)):
    return { "code": "ok", "data": request.session["user_session_role"] }
 
 
 
-@app.post(f"{API_BASE}/room/sentence", status_code=200)
+@app.post("/room/sentence", status_code=200)
 def verify_guess(request: Request, user_session_id=Depends(check_session)):
    return { "code": "ok", "data": SENTENCES[request.session["user_session_room"]] }
 
@@ -260,7 +272,7 @@ class Guess(BaseModel):
    index: int
 
 
-@app.post(f"{API_BASE}/room/verify", status_code=200)
+@app.post("/room/verify", status_code=200)
 def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_session)):
    user_room = request.session["user_session_room"]
 
@@ -291,15 +303,4 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
    
    tracker["user_attempts"] = 0
    tracker["user_last_attempt"] = None
-   return { "code": "ok" }
-
-
-
-
-@app.post(f"{API_BASE}/leave", status_code=200)
-def leave_room( request: Request, user_session_id=Depends(check_session)):
-   player_leave(user_session_id)
-   request.session["user_session_id"] = str(uuid.uuid4())
-   request.session["user_session_role"] = None
-   request.session["user_session_room"] = None
    return { "code": "ok" }

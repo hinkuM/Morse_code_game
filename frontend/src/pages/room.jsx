@@ -53,21 +53,22 @@ function Room() {
       loadRole();
    }, []);
 
+   const [words, setWords] = useState([]);
    const [wordsLength, setWordsLength] = useState([]);
    useEffect(() => {
       async function loadWords() {
-         const sentence = await GetSentence();
-         const splitSentence = sentence.split(" ");
-         const lengths = splitSentence.map(word => word.length);
-         setWordsLength(lengths);
+         const sentence = await GetSentence()
+         const splitSentence = sentence.split(" ").map(word => word.split(""))
+         setWords(splitSentence)
+         setWordsLength(splitSentence.map(word => word.length))
       }
       loadWords();
    }, []);
 
    if (role === "sender") {
-      return <RoomSender morseTranslation={morseTranslation} wordsLength={wordsLength} />;
+      return <RoomSender morseTranslation={morseTranslation} wordsLength={wordsLength} words={words} />
    } else if (role === "receiver") {
-      return <RoomReceiver morseTranslation={morseTranslation} wordsLength={wordsLength} />;
+      return <RoomReceiver morseTranslation={morseTranslation} wordsLength={wordsLength} />
    }
    return null;
 
@@ -85,16 +86,18 @@ function RoomReceiver({ morseTranslation, wordsLength }) {
       console.log(letter, wordIndex, letterIndex);
 
       const result = await VerifyGuess({ letter, index: currentLetterIndex.index })
-      changeCurrentIndex((currentIndex) => {
-         if (result) {
-            currentIndex.index += 1
-            currentIndex.letter += 1
-            if (currentIndex.letter >= wordsLength[wordIndex]) {
-               currentIndex.letter = 0
-               currentIndex.word += 1
-            }
+      changeCurrentIndex((prev) => {
+         if (!result) {
+            return { ...prev, ready: true }
          }
-         return { ready: true, letter: currentIndex.letter, word: currentIndex.word, index: currentIndex.index }
+         let newIndex = prev.index + 1
+         let newLetter = prev.letter + 1
+         let newWord = prev.word
+         if (newLetter >= wordsLength[wordIndex]) {
+            newLetter = 0
+            newWord += 1
+         }
+         return { ready: true, letter: newLetter, word: newWord, index: newIndex }
       })
       return result
    }
@@ -118,7 +121,9 @@ function RoomReceiver({ morseTranslation, wordsLength }) {
 
                <section id={styles.translationtable}>
                   {morseTranslation.map((block, index) => (
-                     <div className={`
+                     <div
+                        key={index}
+                        className={`
                      ${styles.translationblock}
                      ${block.number ? styles.number : ""}
                      `}>
@@ -135,23 +140,17 @@ function RoomReceiver({ morseTranslation, wordsLength }) {
    );
 }
 
-function RoomSender({ morseTranslation, wordsLength }) {
-   const [words, setWords] = useState([]);
-   useEffect(() => {
-      async function loadWords() {
-         const sentence = await GetSentence();
-         const splitSentence = sentence.split(" ");
-         const words = splitSentence.map(word => word.split(""));
-         setWords(words);
-      }
-      loadWords();
-   }, []);
+function RoomSender({ morseTranslation, wordsLength, words }) {
+   const [currentLetterIndex, changeCurrentIndex] = useState({ ready: true, index: 0, letter: 0, word: 0 });
 
    useEffect(() => {
       let time
       let transmitting = false
       function handleKeyDown(e) {
          e.preventDefault()
+         if (e.code !== "Space" && e.code !== "Enter" && e.code !== "Backspace") {
+            return
+         }
          if (transmitting) {
             return
          }
@@ -188,11 +187,24 @@ function RoomSender({ morseTranslation, wordsLength }) {
             return
          }
          if (e.code === "Space") {
+            console.log(Date.now() - time);
+
             if (Date.now() - time > 200) {
                inputBar.innerText += " ᠆"
             } else {
                inputBar.innerText += " •"
             }
+         }
+         if (e.code === "Enter") {
+            console.log(currentLetterIndex);
+
+            const activeDiv = document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter]
+            activeDiv.value = morseTranslation.filter((el) => el.morse.trim() === inputBar.innerText.trim())[0].letter
+            const event = new Event('input', {
+               bubbles: true,
+            })
+            activeDiv.dispatchEvent(event)
+            inputBar.innerText = "Zacznij nadawać"
          }
          const allMatches = morseTranslation.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) === inputBar.innerText.trim())
          const allCounterMatches = morseTranslation.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) != inputBar.innerText.trim())
@@ -218,29 +230,26 @@ function RoomSender({ morseTranslation, wordsLength }) {
       };
    }, []);
 
-
-   const [currentLetterIndex, changeCurrentIndex] = useState({ ready: true, index: 0, letter: 0, word: 0 });
    async function onLetterInput({ letter, wordIndex, letterIndex }) {
-      changeCurrentIndex((currentIndex) => {
-         currentIndex.ready = false
-         return currentIndex
-      })
-      console.log(letter, wordIndex, letterIndex);
-
-      const result = await VerifyGuess({ letter, index: currentLetterIndex.index })
-      changeCurrentIndex((currentIndex) => {
-         if (result) {
-            currentIndex.index += 1
-            currentIndex.letter += 1
-            if (currentIndex.letter >= wordsLength[wordIndex]) {
-               currentIndex.letter = 0
-               currentIndex.word += 1
-            }
+      let result = false
+      changeCurrentIndex((prev) => {
+         const isCorrect = letter.toUpperCase() === words[prev.word][prev.letter].toUpperCase()
+         if (!isCorrect) {
+            return { ...prev, ready: true }
          }
-         return { ready: true, letter: currentIndex.letter, word: currentIndex.word, index: currentIndex.index }
+         result = true
+         let newIndex = prev.index + 1
+         let newLetter = prev.letter + 1
+         let newWord = prev.word
+         if (newLetter >= wordsLength[wordIndex]) {
+            newLetter = 0
+            newWord += 1
+         }
+         return { ready: true, letter: newLetter, word: newWord, index: newIndex }
       })
       return result
    }
+
    return (
       <>
          <div id={styles.all}>
@@ -254,6 +263,7 @@ function RoomSender({ morseTranslation, wordsLength }) {
                      wordIndex={index}
                      currentLetterIndex={currentLetterIndex}
                      onLetterInput={onLetterInput}
+                     word={words[index]}
                   />
                ))}
             </main>
@@ -261,10 +271,14 @@ function RoomSender({ morseTranslation, wordsLength }) {
                <section id={styles.translationtable}>
                   <div id={styles.translationcover} className={styles.hidden}></div>
                   {morseTranslation.map((block, index) => (
-                     <div id={block.letter} className={`
-                     ${styles.translationblock}
-                     ${block.number ? styles.number : ""}
-                     `}>
+                     <div
+                        key={index}
+                        id={block.letter}
+                        className={`
+                           ${styles.translationblock}
+                           ${block.number ? styles.number : ""}
+                        `}
+                     >
                         <div className={styles.letter}>{block.letter}</div>
                         <div className={styles.morse}>{block.morse}</div>
                      </div>
