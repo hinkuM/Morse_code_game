@@ -15,7 +15,7 @@ MAX_TIMEOUT_ATTEMPTS = 5
 ROOMS_DB = "rooms"
 ROLES_DB = "roles"
 PLAYERS_DB = "players"
-FRONTEND = "../frontend/new"
+FRONTEND = "../frontend"
 
 
 import os
@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from enum import Enum
 from dotenv import load_dotenv
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # ENV
@@ -146,21 +146,29 @@ scheduler.start()
 
 create_database_tables()
 
+class NotAuthenticated(Exception):
+    pass
 
+@app.exception_handler(NotAuthenticated)
+async def not_authenticated_handler(request: Request, exc: NotAuthenticated):
+    return RedirectResponse(url="/")
 
+class Terminate(Exception):
+    pass
 
-
+@app.exception_handler(Terminate)
+async def not_authenticated_handler(request: Request, exc: Terminate):
+    return RedirectResponse(url="/leave")
 
 def check_session(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):
    user_session_id = request.session.get("user_session_id")
    if user_session_id is None:
-      raise HTTPException(status_code=400, detail="User has no session ID")
+      raise NotAuthenticated()
    cursor = conn.cursor()
    cursor.execute(f"SELECT * FROM {PLAYERS_DB} WHERE player_id = (?)", (user_session_id,))
    player_data = cursor.fetchone()
-
    if player_data is None:
-      raise HTTPException(status_code=400, detail="User is not in game")
+      raise Terminate()
    return user_session_id
 
 
@@ -173,17 +181,36 @@ def ensure_session(request: Request):
 
 
 @app.get("/")
-def index():
-    return FileResponse(f"{FRONTEND}/home.html")
+def index(request: Request):
+   print(request.session)
+   if request.session.get("user_session_room") != None:
+      return RedirectResponse(url="/room")
+   return FileResponse(f"{FRONTEND}/views/home.html")
 
+@app.get("/waiting")
+def index(request: Request, user_session_id=Depends(check_session)):
+   return FileResponse(f"{FRONTEND}/views/waiting.html")
+
+
+@app.get("/room")
+def index(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(f"SELECT COUNT(player_id) AS player_count FROM {PLAYERS_DB} WHERE room_id = (?)", (request.session.get("user_session_room"),))
+   room_data = cursor.fetchone()
+   print(room_data)
+   if room_data["player_count"] == 2:
+      return FileResponse(f"{FRONTEND}/views/room.html")
+   return RedirectResponse(url="/waiting")
 
 @app.get("/leave")
-def leave_room( request: Request, user_session_id=Depends(check_session)):
-   player_leave(user_session_id)
+def leave_room( request: Request):
+   if not request.session["user_session_id"]:
+      return RedirectResponse(url="/")
+   player_leave(request.session["user_session_id"])
    request.session["user_session_id"] = str(uuid.uuid4())
    request.session["user_session_role"] = None
    request.session["user_session_room"] = None
-   return { "code": "REDIRECT", "data": "/" }
+   return RedirectResponse(url="/")
 
 
 
@@ -303,4 +330,4 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
    
    tracker["user_attempts"] = 0
    tracker["user_last_attempt"] = None
-   return { "code": "ok" }
+   return { "code": "ok", "data": True }

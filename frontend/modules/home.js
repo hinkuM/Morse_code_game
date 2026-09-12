@@ -18,6 +18,7 @@ for (let i = 0; i < rooms.length; i++) {
       const button = children[j];
       if (button.classList.contains("sender")) {
          button.addEventListener("click", () => {
+            button.classList.add("taken")
             joinRoom(i, "sender")
          })
          if (availability[i]?.["sender"]) {
@@ -25,6 +26,7 @@ for (let i = 0; i < rooms.length; i++) {
          }
       } else if (button.classList.contains("receiver")) {
          button.addEventListener("click", () => {
+            button.classList.add("taken")
             joinRoom(i, "receiver")
          })
          if (availability[i]?.["receiver"]) {

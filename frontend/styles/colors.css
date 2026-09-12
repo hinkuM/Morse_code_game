@@ -12,5 +12,6 @@
    --green: rgb(0, 112, 0);
    --red: rgb(168, 0, 0);
    --grey: grey;
+   --light-grey: rgb(165, 165, 165);
    --orange: orange;
 }
