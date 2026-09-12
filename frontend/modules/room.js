@@ -1,4 +1,4 @@
-import { role, sentence, verifyGuess } from "./api.js"
+import { role, sentence, verifyGuess, senderGuess, startTime } from "./api.js"
 
 const header = document.querySelector("header")
 const main = document.querySelector("main")
@@ -46,7 +46,9 @@ const morseTranslation = [
    { letter: "0", morse: "᠆ ᠆ ᠆ ᠆ ᠆", number: true },
 ]
 
-const startDate = Date.now()
+const serverTime = new Date(await startTime())
+const timeDifference = new Date().getHours() - serverTime.getHours()
+const startDate = timeDifference != 0 ? serverTime.getTime() + timeDifference * 60 * 60 * 1000 : serverTime.getTime()
 setInterval(() => {
    const time = Date.now() - startDate
    const seconds = Math.floor(time / 1000) % 60
@@ -170,6 +172,7 @@ class Sender {
    async onLetterInput(letter, word) {
       const isCorrect =
          letter.toUpperCase() === word[currentLetterIndex.letter].toUpperCase()
+      senderGuess(isCorrect)
       if (!isCorrect) return false
       currentLetterIndex.index += 1
       currentLetterIndex.letter += 1

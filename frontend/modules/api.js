@@ -64,6 +64,32 @@ export function verifyGuess(letter, index) {
    )
 }
 
+export function senderGuess(correct) {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/senderGuess",
+         data: { correct },
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
+export function startTime() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/time",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
 async function apiRequester({ method, url, data = {}, contentType = null }) {
    const options = {
       method,
