@@ -41,6 +41,14 @@ aside {
    text-align: left;
 }
 
+.scoring-list.get {
+   color: var(--green)
+}
+
+.scoring-list.lose {
+   color: var(--red)
+}
+
 #scoring-title {
    color: var(--foreground-light);
    font-size: 32px;

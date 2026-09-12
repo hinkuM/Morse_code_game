@@ -337,7 +337,15 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
    start_time = cursor.fetchone()
    return { "code": "ok", "data": start_time["game_start_time"] }
 
-
+@app.post("/room/errors", status_code=200)
+def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"SELECT SUM(incorrect_guesses) as errors FROM {PLAYERS_DB} WHERE room_id = (?)",
+      (request.session["user_session_room"],)
+   )
+   errors = cursor.fetchone()
+   return { "code": "ok", "data": errors["errors"] }
  
 class Guess(BaseModel):
    letter: str

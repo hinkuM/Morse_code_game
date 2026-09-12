@@ -1,10 +1,11 @@
-import { role, sentence, verifyGuess, senderGuess, startTime } from "./api.js"
+import { role, sentence, verifyGuess, senderGuess, startTime, errors } from "./api.js"
 
 const header = document.querySelector("header")
 const main = document.querySelector("main")
 const footer = document.querySelector("footer")
 const morseTableContainer = document.getElementById("translation-table")
 const scoringContainer = document.getElementById("scoring")
+const MAX_TIME = 5 * 60 * 1000
 
 
 const morseTranslation = [
@@ -54,7 +55,17 @@ setInterval(() => {
    const seconds = Math.floor(time / 1000) % 60
    const minutes = Math.floor(Math.floor(time / 1000) / 60)
    header.innerText = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
+   if (time > MAX_TIME) {
+      document.getElementById("scoring-time").classList.add("lose")
+   }
 }, 100)
+
+const err = setInterval(async () => {
+   if (await errors() > 0) {
+      document.getElementById("scoring-error").classList.add("lose")
+      clearInterval(err)
+   }
+}, 3000)
 
 function morseGrid() {
    for (const info of morseTranslation) {
@@ -270,6 +281,8 @@ function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefine
             input.classList.remove("active")
             input.blur()
             document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
+         } else {
+            document.getElementById("scoring-error").classList.add("lose")
          }
       })
       container.append(input)

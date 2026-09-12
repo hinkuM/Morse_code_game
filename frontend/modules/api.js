@@ -90,6 +90,20 @@ export function startTime() {
       }
    )
 }
+
+export function errors() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/errors",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
 async function apiRequester({ method, url, data = {}, contentType = null }) {
    const options = {
       method,
