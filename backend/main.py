@@ -3,7 +3,7 @@
 # GLOBAL VARIABLES
 API_BASE = "/api"
 SENTENCES = [
-   "I love testing python code".lower(),
+   "I".lower(),
    "Hello me explode fast us".lower(),
    "This IS working".lower(),
    "Cosmic theme game mhm".lower()
@@ -76,6 +76,7 @@ def create_database_tables():
             player_id TEXT NOT NULL,
             room_id INTEGER NOT NULL,
             role TEXT NOT NULL,
+            ready INTEGER NOT NULL DEFAULT 0,
             correct_guesses INTEGER NOT NULL DEFAULT 0,
             incorrect_guesses INTEGER NOT NULL DEFAULT 0,
             sentence TEXT NOT NULL,
@@ -227,6 +228,16 @@ def leave_room( request: Request):
    request.session["user_session_room"] = None
    return RedirectResponse(url="/")
 
+@app.post("/leave")
+def leave_room( request: Request):
+   if not request.session["user_session_id"]:
+      return RedirectResponse(url="/")
+   player_leave(request.session["user_session_id"])
+   request.session["user_session_id"] = str(uuid.uuid4())
+   request.session["user_session_role"] = None
+   request.session["user_session_room"] = None
+   return {"code": "ok"}
+
 @app.get("/rooms")
 def index(conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -309,7 +320,6 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
    room_data = cursor.fetchone()
 
    if room_data["player_count"] == 2:
-      cursor.execute(f"UPDATE {ROOMS_DB} SET game_started = 1, game_start_time = CURRENT_TIMESTAMP WHERE id = (?)", (body.roomNumber,))
       redirect = "/room"
 
    return { "code": "REDIRECT", "data": redirect }
@@ -320,8 +330,6 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
 @app.post("/room/role", status_code=200)
 def send_role(request: Request, user_session_id=Depends(check_session)):
    return { "code": "ok", "data": request.session["user_session_role"] }
-
-
 
 @app.post("/room/sentence", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session)):
@@ -346,7 +354,64 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
    )
    errors = cursor.fetchone()
    return { "code": "ok", "data": errors["errors"] }
- 
+
+@app.post("/room/ready", status_code=200)
+def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"UPDATE {PLAYERS_DB} SET ready = 1 WHERE player_id = (?)",
+      (user_session_id,)
+   )
+   cursor.execute(
+      f"SELECT ready FROM {PLAYERS_DB} WHERE room_id = (?) AND player_id <> (?)",
+      (request.session["user_session_room"], user_session_id)
+   )
+   isReady = cursor.fetchone()
+   if isReady["ready"] == 1:
+      cursor.execute(
+         f"UPDATE {ROOMS_DB} SET game_started = 1, game_start_time = CURRENT_TIMESTAMP WHERE id = (?)", 
+         (request.session["user_session_room"],)
+         )
+      
+   return { "code": "ok", "data": True if isReady["ready"] == 1 else False }
+
+@app.post("/room/started", status_code=200)
+def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"SELECT game_started FROM {ROOMS_DB} WHERE id = (?)",
+      (request.session["user_session_room"],)
+   )
+   started = cursor.fetchone()
+      
+   return { "code": "ok", "data": True if started["game_started"] == 1 else False }
+
+@app.post("/room/finish", status_code=200)
+def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"SELECT correct_guesses, sentence FROM {PLAYERS_DB} WHERE room_id = (?) AND role = 'receiver'",
+      (request.session["user_session_room"],)
+   )
+   current_state = cursor.fetchone()
+   if not current_state["correct_guesses"] == len(current_state["sentence"]):
+      return { "code": "ok" }
+   cursor.execute(
+      f"SELECT SUM(incorrect_guesses) as errors FROM {PLAYERS_DB} WHERE player_id = (?)",
+      (request.session["user_session_room"],)
+   )
+   no_errors = True if cursor.fetchone()["errors"] == 0 else False
+   cursor.execute(
+      f"SELECT game_start_time FROM {ROOMS_DB} WHERE id = (?)",
+      (request.session["user_session_room"],)
+   )
+   print(cursor.fetchone()["game_start_time"])
+   in_time = True if cursor.fetchone()["game_start_time"] else False
+      
+   return { "code": "ok", "data": {"no_errors": no_errors  } }
+
+
+
 class Guess(BaseModel):
    letter: str
    index: int
@@ -391,9 +456,6 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
       f"UPDATE {PLAYERS_DB} SET correct_guesses = correct_guesses + 1 WHERE player_id = (?)",
       (user_session_id,)
    )
-
-   # if len(SENTENCES_TRIMED[user_room]) == body.index:
-      
    
    tracker["user_attempts"] = 0
    tracker["user_last_attempt"] = None

@@ -1,4 +1,4 @@
-import { role, sentence, verifyGuess, senderGuess, startTime, errors } from "./api.js"
+import { role, sentence, verifyGuess, senderGuess, startTime, errors, isReady, gameStarted, finish, leave } from "./api.js"
 
 const header = document.querySelector("header")
 const main = document.querySelector("main")
@@ -6,9 +6,7 @@ const footer = document.querySelector("footer")
 const morseTableContainer = document.getElementById("translation-table")
 const scoringContainer = document.getElementById("scoring")
 const MAX_TIME = 5 * 60 * 1000
-
-
-const morseTranslation = [
+const MORSE_TRANSLATION = [
    { letter: "A", morse: "• ᠆" },
    { letter: "B", morse: "᠆ • • •" },
    { letter: "C", morse: "᠆ • ᠆ •" },
@@ -46,49 +44,96 @@ const morseTranslation = [
    { letter: "9", morse: "᠆ ᠆ ᠆ ᠆ •", number: true },
    { letter: "0", morse: "᠆ ᠆ ᠆ ᠆ ᠆", number: true },
 ]
+let MAX_LENGTH
+let isPlayerReadyInterval
+const currentLetterIndex = { ready: true, index: 0, letter: 0, word: 0 }
 
-const serverTime = new Date(await startTime())
-const timeDifference = new Date().getHours() - serverTime.getHours()
-const startDate = timeDifference != 0 ? serverTime.getTime() + timeDifference * 60 * 60 * 1000 : serverTime.getTime()
-setInterval(() => {
-   const time = Date.now() - startDate
-   const seconds = Math.floor(time / 1000) % 60
-   const minutes = Math.floor(Math.floor(time / 1000) / 60)
-   header.innerText = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
-   if (time > MAX_TIME) {
-      document.getElementById("scoring-time").classList.add("lose")
+function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefined) {
+   const container = document.createElement("section")
+   container.classList.add("word")
+   container.setAttribute("id", "word" + wordIndex)
+   for (let i = 0; i < wordLength; i++) {
+      const input = document.createElement("input")
+      input.classList.add("placeholder")
+      if (i === 0 && wordIndex === 0) input.classList.add("active")
+      input.placeholder = word ? word[i].toUpperCase() : ""
+
+      input.addEventListener("mouseenter", (e) => {
+         if (word) return
+         if (currentLetterIndex.letter != i && currentLetterIndex.word != wordIndex) {
+            return
+         }
+         input.classList.add("hover")
+      })
+      input.addEventListener("mouseleave", (e) => {
+         input.classList.remove("hover")
+      })
+      input.addEventListener("focus", (e) => {
+         if (currentLetterIndex.letter != i && currentLetterIndex.word != wordIndex) {
+            return input.blur()
+         }
+         if (word) input.blur()
+         input.classList.add("active")
+      })
+      input.addEventListener("input", async (e) => {
+         input.value = input.value.toUpperCase()
+         const value = input.value
+         if (value.length <= 0) {
+            return
+         }
+         const letter = value.slice(-1)
+         if (value.length > 1) {
+            input.value = letter
+         }
+
+         if (!currentLetterIndex.ready) {
+            return console.log("inactive");
+         }
+
+         const result = await onLetterInput(letter, word ?? wordLength)
+         console.log(result);
+         input.classList.add("incorrect")
+         if (result) {
+            input.classList.remove("incorrect")
+            input.classList.add("correct")
+            input.classList.remove("active")
+            input.blur()
+            document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
+         } else {
+            document.getElementById("scoring-error").classList.add("lose")
+         }
+      })
+      container.append(input)
    }
-}, 100)
-
-const err = setInterval(async () => {
-   if (await errors() > 0) {
-      document.getElementById("scoring-error").classList.add("lose")
-      clearInterval(err)
-   }
-}, 3000)
-
-function morseGrid() {
-   for (const info of morseTranslation) {
-      const container = document.createElement("div")
-      const letter = document.createElement("div")
-      const morse = document.createElement("div")
-
-      container.classList.add("translation-block")
-      if (info?.number) container.classList.add("number")
-      container.setAttribute("id", info.letter)
-      letter.classList.add("letter")
-      letter.innerText = info.letter
-      morse.classList.add("morse")
-      morse.innerText = info.morse
-
-      container.append(letter, morse)
-      morseTableContainer.append(container)
-   }
+   return container
 }
 
-morseGrid()
 
-const currentLetterIndex = { ready: true, index: 0, letter: 0, word: 0 }
+async function restartGame() {
+   await leave()
+   window.location.reload()
+}
+
+async function endGame() {
+   const data = await finish()
+   const container = document.createElement("dialog")
+   const title = document.createElement("div")
+   const restart = document.createElement("button")
+
+   container.setAttribute("id", "end")
+
+   title.setAttribute("id", "end-title")
+   title.innerText = "Ukończyłeś zadanie! Otrzymujesz punkty"
+   console.log(data);
+   restart.innerText = "restart"
+   restart.addEventListener("click", async () => {
+      await restartGame()
+   })
+
+   container.append(title)
+   document.body.append(container)
+   container.showModal()
+}
 
 class Sender {
    async init() {
@@ -157,15 +202,15 @@ class Sender {
          }
          if (e.code === "Enter") {
             const activeDiv = document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter]
-            activeDiv.value = morseTranslation.filter((el) => el.morse.trim() === inputBar.innerText.trim())[0].letter
+            activeDiv.value = MORSE_TRANSLATION.filter((el) => el.morse.trim() === inputBar.innerText.trim())[0].letter
             const event = new Event('input', {
                bubbles: true,
             })
             activeDiv.dispatchEvent(event)
             inputBar.innerText = "Zacznij nadawać"
          }
-         const allMatches = morseTranslation.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) === inputBar.innerText.trim())
-         const allCounterMatches = morseTranslation.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) != inputBar.innerText.trim())
+         const allMatches = MORSE_TRANSLATION.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) === inputBar.innerText.trim())
+         const allCounterMatches = MORSE_TRANSLATION.filter((el) => el.morse.trim().slice(0, inputBar.innerText.trim().length) != inputBar.innerText.trim())
          for (const id of allCounterMatches) {
             document.getElementById(id.letter).classList.remove("hint")
          }
@@ -196,7 +241,9 @@ class Sender {
 }
 class Receiver {
    async init() {
-      const words = (await sentence()).split(" ")
+      const fullSentence = await sentence()
+      const words = (fullSentence).split(" ")
+      MAX_LENGTH = fullSentence.replace(" ", "").length
 
       for (let i = 0; i < words.length; i++) {
          const word = words[i]
@@ -216,76 +263,116 @@ class Receiver {
          currentLetterIndex.letter = 0
          currentLetterIndex.word += 1
       }
+      if (currentLetterIndex.index === MAX_LENGTH) {
+         endGame()
+      }
       return true
    }
 }
 
-const userRole = await role()
-
-if (userRole === "sender") {
-   const SenderClass = new Sender()
-   await SenderClass.init()
-} else if (userRole === "receiver") {
-   const ReceiverClass = new Receiver()
-   await ReceiverClass.init()
-}
-
-function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefined) {
-   const container = document.createElement("section")
-   container.classList.add("word")
-   container.setAttribute("id", "word" + wordIndex)
-   for (let i = 0; i < wordLength; i++) {
-      const input = document.createElement("input")
-      input.classList.add("placeholder")
-      if (i === 0 && wordIndex === 0) input.classList.add("active")
-      input.placeholder = word ? word[i].toUpperCase() : ""
-
-      input.addEventListener("mouseenter", (e) => {
-         if (word) return
-         if (currentLetterIndex.letter != i && currentLetterIndex.word != wordIndex) {
-            return
-         }
-         input.classList.add("hover")
-      })
-      input.addEventListener("mouseleave", (e) => {
-         input.classList.remove("hover")
-      })
-      input.addEventListener("focus", (e) => {
-         if (currentLetterIndex.letter != i && currentLetterIndex.word != wordIndex) {
-            return input.blur()
-         }
-         if (word) input.blur()
-         input.classList.add("active")
-      })
-      input.addEventListener("input", async (e) => {
-         input.value = input.value.toUpperCase()
-         const value = input.value
-         if (value.length <= 0) {
-            return
-         }
-         const letter = value.slice(-1)
-         if (value.length > 1) {
-            input.value = letter
-         }
-
-         if (!currentLetterIndex.ready) {
-            return console.log("inactive");
-         }
-
-         const result = await onLetterInput(letter, word ?? wordLength)
-         console.log(result);
-         input.classList.add("incorrect")
-         if (result) {
-            input.classList.remove("incorrect")
-            input.classList.add("correct")
-            input.classList.remove("active")
-            input.blur()
-            document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
-         } else {
-            document.getElementById("scoring-error").classList.add("lose")
-         }
-      })
-      container.append(input)
+class Game {
+   async role() {
+      this.userRole = await role()
    }
-   return container
+
+   async init() {
+      const container = document.createElement("dialog")
+      const title = document.createElement("div")
+
+      container.setAttribute("id", "round")
+
+      title.setAttribute("id", "round-title")
+      title.innerText = "Naciśnij Enter, gdy będziesz gotowy"
+
+      container.append(title)
+      document.body.append(container)
+      container.showModal()
+   }
+
+   countdown() {
+      const endTime = Date.now() + 5000
+      const timer = setInterval(async () => {
+         const time = endTime - Date.now()
+         if (time <= 0) {
+            clearInterval(timer)
+            document.getElementById("round").remove()
+            return await this.start()
+         }
+         const seconds = Math.floor(time / 1000) % 60
+         document.getElementById("round-title").innerText = "Gra rozpocznie się za: " + seconds + "s"
+      }, 200)
+   }
+
+   async start() {
+      if (this.userRole === "sender") {
+         const SenderClass = new Sender()
+         await SenderClass.init()
+      } else if (this.userRole === "receiver") {
+         const ReceiverClass = new Receiver()
+         await ReceiverClass.init()
+      }
+      const serverTime = new Date(await startTime())
+      const timeDifference = new Date().getHours() - serverTime.getHours()
+      const startDate = timeDifference != 0 ? serverTime.getTime() + timeDifference * 60 * 60 * 1000 : serverTime.getTime()
+      setInterval(() => {
+         const time = Date.now() - startDate - 5000
+         const seconds = Math.floor(time / 1000) % 60
+         const minutes = Math.floor(Math.floor(time / 1000) / 60)
+         header.innerText = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
+         if (time > MAX_TIME) {
+            document.getElementById("scoring-time").classList.add("lose")
+         }
+      }, 100)
+
+      const err = setInterval(async () => {
+         if (await errors() > 0) {
+            document.getElementById("scoring-error").classList.add("lose")
+            clearInterval(err)
+         }
+      }, 3000)
+
+   }
+
+   createGrids() {
+      for (const info of MORSE_TRANSLATION) {
+         const container = document.createElement("div")
+         const letter = document.createElement("div")
+         const morse = document.createElement("div")
+
+         container.classList.add("translation-block")
+         if (info?.number) container.classList.add("number")
+         container.setAttribute("id", info.letter)
+         letter.classList.add("letter")
+         letter.innerText = info.letter
+         morse.classList.add("morse")
+         morse.innerText = info.morse
+
+         container.append(letter, morse)
+         morseTableContainer.append(container)
+      }
+   }
 }
+
+const gameControls = new Game()
+gameControls.role()
+if (await gameStarted()) {
+   await gameControls.start()
+} else {
+   await gameControls.init()
+}
+
+
+window.addEventListener("keypress", (e) => {
+   if (e.code === "Enter" && document.getElementById("round-title")) {
+      e.preventDefault()
+      document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."
+      isPlayerReadyInterval = setInterval(async () => {
+         if (await isReady()) {
+            clearInterval(isPlayerReadyInterval)
+            gameControls.countdown()
+         } else {
+            document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."
+         }
+      }, 500)
+   }
+})

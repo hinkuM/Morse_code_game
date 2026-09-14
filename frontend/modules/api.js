@@ -104,6 +104,58 @@ export function errors() {
    )
 }
 
+export function isReady() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/ready",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
+export function gameStarted() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/started",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
+export function finish() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/finish",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
+export function leave() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/leave",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
 async function apiRequester({ method, url, data = {}, contentType = null }) {
    const options = {
       method,

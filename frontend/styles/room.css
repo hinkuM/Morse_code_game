@@ -202,3 +202,26 @@ footer {
 .incorrect {
    border-color: var(--red);
 }
+
+#round,
+#end {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+   width: 340px;
+   height: 250px;
+   color: var(--foreground-light);
+   background-color: var(--background);
+   border: 1px solid var(--foreground-light);
+   border-radius: var(--radius);
+   font-size: 28px;
+   text-align: center;
+   outline: none;
+}
+
+#round::backdrop,
+#end::backdrop {
+   background-color: var(--background);
+   opacity: 0.8;
+}
