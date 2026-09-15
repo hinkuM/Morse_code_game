@@ -195,6 +195,15 @@ def ensure_session(request: Request):
       players_attempts_tracker.setdefault(user_session_id, {"user_attempts": 0, "user_last_attempt": None})
    return request.session["user_session_id"]
 
+@app.get("/test")
+def test(request: Request):
+   return FileResponse(f"{FRONTEND}/views/test.html")
+
+@app.post("/test")
+def test(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(f"SELECT * FROM {PLAYERS_DB}", ())
+   return {"code":"ok", "data": cursor.fetchall()}
 
 @app.get("/")
 def index(request: Request):
@@ -429,6 +438,10 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
       cursor.execute(f"INSERT INTO {RESULTS_DB} (team_name, room_id, point_no_error, point_time, sentence, time) VALUES (?, ?, ?, ?, ?, ?)", 
          (body.teamName, request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, SENTENCES[request.session["user_session_room"]], int(time.time() * 1000) - milliseconds - 5000 )
       )
+   cursor.execute(
+      f"UPDATE {PLAYERS_DB} SET ready = 0 WHERE player_id = (?)", 
+      (user_session_id,)
+   )
    return { "code": "ok", "data": {"no_errors": no_errors, "in_time": in_time  } }
 
 @app.post("/room/restart", status_code=200)
@@ -447,7 +460,7 @@ def restart(request: Request, user_session_id=Depends(check_session), conn: sqli
    ''', (user_session_id,))
    request.session["user_session_id"] = str(uuid.uuid4())
    cursor.execute(
-      f"UPDATE {PLAYERS_DB} SET player_id = (?), correct_guesses = 0, incorrect_guesses = 0, ready = 0  WHERE player_id = (?)", 
+      f"UPDATE {PLAYERS_DB} SET player_id = (?), correct_guesses = 0, incorrect_guesses = 0 WHERE player_id = (?)", 
       (request.session["user_session_id"], user_session_id )
    )
    return {"code": "ok"}

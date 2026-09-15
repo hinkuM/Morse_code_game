@@ -170,6 +170,19 @@ export function restart() {
    )
 }
 
+export function test() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "test",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
 async function apiRequester({ method, url, data = {}, contentType = null }) {
    const options = {
       method,
