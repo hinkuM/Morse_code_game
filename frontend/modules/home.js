@@ -19,7 +19,6 @@ setInterval(async () => {
 }, 1000)
 
 
-
 for (let i = 0; i < rooms.length; i++) {
    const children = rooms[i].children;
    for (let j = 0; j < children.length; j++) {

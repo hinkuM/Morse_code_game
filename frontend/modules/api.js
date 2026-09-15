@@ -130,11 +130,12 @@ export function gameStarted() {
    )
 }
 
-export function finish() {
+export function finish(teamName) {
    return apiRequester(
       {
          method: "POST",
          url: "/room/finish",
+         data: { teamName: teamName ?? "" },
          contentType: "application/json",
          success: (response) => {
             return response
@@ -143,11 +144,24 @@ export function finish() {
    )
 }
 
-export function leave() {
+export function progress() {
    return apiRequester(
       {
          method: "POST",
-         url: "/room/leave",
+         url: "/room/progress",
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
+export function restart() {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "/room/restart",
          contentType: "application/json",
          success: (response) => {
             return response

@@ -1,4 +1,7 @@
-import { role, sentence, verifyGuess, senderGuess, startTime, errors, isReady, gameStarted, finish, leave } from "./api.js"
+import {
+   role, sentence, verifyGuess, senderGuess,
+   startTime, errors, isReady, gameStarted, finish, progress, restart
+} from "./api.js"
 
 const header = document.querySelector("header")
 const main = document.querySelector("main")
@@ -44,9 +47,14 @@ const MORSE_TRANSLATION = [
    { letter: "9", morse: "᠆ ᠆ ᠆ ᠆ •", number: true },
    { letter: "0", morse: "᠆ ᠆ ᠆ ᠆ ᠆", number: true },
 ]
+const MORSE_TRANSLATION_MAP = new Map(MORSE_TRANSLATION.map((el) => [el.letter, el.morse]))
 let MAX_LENGTH
 let isPlayerReadyInterval
 const currentLetterIndex = { ready: true, index: 0, letter: 0, word: 0 }
+let timeCheckerInterval
+let progressTracker
+let teamName
+let errorTracker
 
 function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefined) {
    const container = document.createElement("section")
@@ -60,7 +68,7 @@ function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefine
 
       input.addEventListener("mouseenter", (e) => {
          if (word) return
-         if (currentLetterIndex.letter != i && currentLetterIndex.word != wordIndex) {
+         if (currentLetterIndex.letter != i || currentLetterIndex.word != wordIndex) {
             return
          }
          input.classList.add("hover")
@@ -69,11 +77,14 @@ function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefine
          input.classList.remove("hover")
       })
       input.addEventListener("focus", (e) => {
-         if (currentLetterIndex.letter != i && currentLetterIndex.word != wordIndex) {
+         if (currentLetterIndex.letter != i || currentLetterIndex.word != wordIndex) {
             return input.blur()
          }
          if (word) input.blur()
          input.classList.add("active")
+      })
+      input.addEventListener("blur", (e) => {
+         input.classList.remove("active")
       })
       input.addEventListener("input", async (e) => {
          input.value = input.value.toUpperCase()
@@ -91,14 +102,15 @@ function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefine
          }
 
          const result = await onLetterInput(letter, word ?? wordLength)
-         console.log(result);
          input.classList.add("incorrect")
          if (result) {
             input.classList.remove("incorrect")
             input.classList.add("correct")
             input.classList.remove("active")
             input.blur()
-            document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
+            if (document.getElementById("word" + currentLetterIndex.word)) {
+               document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
+            }
          } else {
             document.getElementById("scoring-error").classList.add("lose")
          }
@@ -108,14 +120,25 @@ function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefine
    return container
 }
 
-
 async function restartGame() {
-   await leave()
+   await restart()
    window.location.reload()
 }
 
+async function waitForReceiverEnd() {
+   document.getElementById("input-bar").remove()
+   const waitingContainer = document.createElement("section")
+   waitingContainer.setAttribute("id", "waiting")
+   waitingContainer.innerText = "Oczekiwanie, aż drugi gracz odszyfruje hasło..."
+   footer.append(waitingContainer)
+}
+
 async function endGame() {
-   const data = await finish()
+   clearInterval(timeCheckerInterval)
+   clearInterval(progressTracker)
+   clearInterval(errorTracker)
+   const data = await finish(teamName)
+   const score = data.no_errors && data.in_time ? 3 : data.no_errors || data.in_time ? 2 : 1
    const container = document.createElement("dialog")
    const title = document.createElement("div")
    const restart = document.createElement("button")
@@ -123,14 +146,13 @@ async function endGame() {
    container.setAttribute("id", "end")
 
    title.setAttribute("id", "end-title")
-   title.innerText = "Ukończyłeś zadanie! Otrzymujesz punkty"
-   console.log(data);
+   title.innerText = "Ukończyłeś zadanie! Otrzymujesz " + score + " punkty!"
    restart.innerText = "restart"
    restart.addEventListener("click", async () => {
       await restartGame()
    })
 
-   container.append(title)
+   container.append(title, restart)
    document.body.append(container)
    container.showModal()
 }
@@ -142,16 +164,18 @@ class Sender {
       senderContainer.innerText = "Zacznij nadawać"
       footer.append(senderContainer)
 
-      const words = (await sentence()).split(" ")
+      const fullSentence = await sentence()
+      const words = (fullSentence).split(" ")
+      MAX_LENGTH = fullSentence.replace(" ", "").length
 
       for (let i = 0; i < words.length; i++) {
          const word = words[i]
          main.append(LetterPlaceholder(this.onLetterInput, i, word.length, word))
-
       }
       let time
       let transmitting = false
       window.addEventListener("keydown", (e) => {
+         if (!document.getElementById("input-bar")) return
          e.preventDefault()
          if (e.code !== "Space" && e.code !== "Enter" && e.code !== "Backspace") {
             return
@@ -163,6 +187,7 @@ class Sender {
          time = Date.now()
       })
       window.addEventListener("keyup", (e) => {
+         if (!document.getElementById("input-bar")) return
          e.preventDefault()
          transmitting = false
          const inputBar = document.getElementById("input-bar")
@@ -192,8 +217,6 @@ class Sender {
             return
          }
          if (e.code === "Space") {
-            console.log(Date.now() - time);
-
             if (Date.now() - time > 200) {
                inputBar.innerText += " ᠆"
             } else {
@@ -226,6 +249,7 @@ class Sender {
    }
 
    async onLetterInput(letter, word) {
+      if (currentLetterIndex.index > MAX_LENGTH) return
       const isCorrect =
          letter.toUpperCase() === word[currentLetterIndex.letter].toUpperCase()
       senderGuess(isCorrect)
@@ -235,6 +259,9 @@ class Sender {
       if (currentLetterIndex.letter >= word.length) {
          currentLetterIndex.letter = 0
          currentLetterIndex.word += 1
+      }
+      if (currentLetterIndex.index === MAX_LENGTH) {
+         waitForReceiverEnd()
       }
       return true
    }
@@ -273,9 +300,45 @@ class Receiver {
 class Game {
    async role() {
       this.userRole = await role()
+      if (this.userRole === "receiver") {
+         const showMorse = document.createElement("button")
+         showMorse.innerText = "Pokaż wiadomość"
+         showMorse.addEventListener("click", () => {
+            gameControls.playCurrentLetter()
+         })
+         footer.append(showMorse)
+      }
    }
 
    async init() {
+      if (this.userRole === "sender") {
+         const container = document.createElement("dialog")
+         const title = document.createElement("div")
+         const name = document.createElement("input")
+         const send = document.createElement("button")
+
+         container.setAttribute("id", "round")
+
+         title.setAttribute("id", "round-title")
+         title.innerText = "Wpisz nazwę drużyny"
+         send.innerText = "Zatwierdź"
+
+         send.addEventListener("click", () => {
+            teamName = name.value
+            container.remove()
+            this.readyDialog()
+         })
+
+         container.append(title, name, send)
+         document.body.append(container)
+         container.showModal()
+
+      } else {
+         this.readyDialog()
+      }
+   }
+
+   readyDialog() {
       const container = document.createElement("dialog")
       const title = document.createElement("div")
 
@@ -310,11 +373,12 @@ class Game {
       } else if (this.userRole === "receiver") {
          const ReceiverClass = new Receiver()
          await ReceiverClass.init()
+         document.querySelector(".active").focus()
       }
       const serverTime = new Date(await startTime())
       const timeDifference = new Date().getHours() - serverTime.getHours()
       const startDate = timeDifference != 0 ? serverTime.getTime() + timeDifference * 60 * 60 * 1000 : serverTime.getTime()
-      setInterval(() => {
+      timeCheckerInterval = setInterval(() => {
          const time = Date.now() - startDate - 5000
          const seconds = Math.floor(time / 1000) % 60
          const minutes = Math.floor(Math.floor(time / 1000) / 60)
@@ -323,17 +387,31 @@ class Game {
             document.getElementById("scoring-time").classList.add("lose")
          }
       }, 100)
+      const allPlaceholders = document.querySelectorAll(".placeholder")
+      progressTracker = setInterval(async () => {
+         const data = await progress()
+         for (let i = 0; i < data.progress; i++) {
+            const child = allPlaceholders[i];
+            child.classList.add("ready")
+         }
+         if (data.progress > 0 && this.userRole === "receiver") {
+            this.currentLetter = data.current_letter
+         }
+         if (this.userRole === "sender" && data.progress === MAX_LENGTH) {
+            await endGame()
+         }
+      }, 1000)
 
-      const err = setInterval(async () => {
+      errorTracker = setInterval(async () => {
          if (await errors() > 0) {
             document.getElementById("scoring-error").classList.add("lose")
-            clearInterval(err)
+            clearInterval(errorTracker)
          }
       }, 3000)
 
    }
 
-   createGrids() {
+   createTranslation() {
       for (const info of MORSE_TRANSLATION) {
          const container = document.createElement("div")
          const letter = document.createElement("div")
@@ -351,16 +429,26 @@ class Game {
          morseTableContainer.append(container)
       }
    }
+
+   playCurrentLetter() {
+      console.log(MORSE_TRANSLATION_MAP.get(this.currentLetter.toUpperCase()));
+   }
 }
 
 const gameControls = new Game()
-gameControls.role()
-if (await gameStarted()) {
-   await gameControls.start()
-} else {
-   await gameControls.init()
-}
-
+window.addEventListener("load", async () => {
+   await gameControls.role()
+   gameControls.createTranslation()
+   if (await gameStarted()) {
+      await gameControls.start()
+   } else {
+      await gameControls.init()
+   }
+   document.getElementById("loadingScreen").classList.add("hidden")
+   setTimeout(() => {
+      document.getElementById("loadingScreen").remove()
+   }, 1000)
+})
 
 window.addEventListener("keypress", (e) => {
    if (e.code === "Enter" && document.getElementById("round-title")) {
