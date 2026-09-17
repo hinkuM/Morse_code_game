@@ -197,7 +197,7 @@ def ensure_session(request: Request):
 
 @app.get("/test")
 def test(request: Request):
-   return FileResponse(f"{FRONTEND}/views/test.html")
+   return FileResponse(f"{FRONTEND}/views/room.html")
 
 @app.post("/test")
 def test(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):

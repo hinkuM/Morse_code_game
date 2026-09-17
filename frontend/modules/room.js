@@ -46,7 +46,7 @@ let progressTracker
 let teamName
 let errorTracker
 
-function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefined) {
+function LetterPlaceholder({ onLetterInput, wordIndex, wordLength, word = undefined, tutorial = undefined } = {}) {
    const container = document.createElement("section")
    container.classList.add("word")
    container.setAttribute("id", "word" + wordIndex)
@@ -91,7 +91,7 @@ function LetterPlaceholder(onLetterInput, wordIndex, wordLength, word = undefine
             return console.log("inactive");
          }
 
-         const result = await onLetterInput(letter, word ?? wordLength)
+         const result = await onLetterInput(letter, word ?? wordLength, tutorial)
          input.classList.add("incorrect")
          if (result) {
             input.classList.remove("incorrect")
@@ -147,6 +147,24 @@ async function endGame() {
    container.showModal()
 }
 
+function endTutorial() {
+   const container = document.createElement("div")
+   const title = document.createElement("div")
+   const start = document.createElement("button")
+
+   container.setAttribute("id", "end")
+
+   title.setAttribute("id", "end-title")
+   title.innerText = "Ukończyłeś szkolenie!"
+   start.innerText = "dalej"
+   start.addEventListener("click", async () => {
+      return
+   })
+
+   container.append(title, start)
+   document.body.append(container)
+}
+
 class Sender {
    async init() {
       const senderContainer = document.createElement("section")
@@ -160,7 +178,12 @@ class Sender {
 
       for (let i = 0; i < words.length; i++) {
          const word = words[i]
-         main.append(LetterPlaceholder(this.onLetterInput, i, word.length, word))
+         main.append(LetterPlaceholder({
+            onLetterInput: this.onLetterInput,
+            wordIndex: i,
+            wordLength: word.length,
+            word: word,
+         }))
       }
       let time
       let transmitting = false
@@ -257,20 +280,26 @@ class Sender {
    }
 }
 class Receiver {
-   async init() {
-      const fullSentence = await sentence()
+   async init(tutorial) {
+      const fullSentence = tutorial.text ?? await sentence()
       const words = (fullSentence).split(" ")
       MAX_LENGTH = fullSentence.replace(" ", "").length
 
       for (let i = 0; i < words.length; i++) {
          const word = words[i]
-         main.append(LetterPlaceholder(this.onLetterInput, i, word.length))
+         main.append(LetterPlaceholder({
+            onLetterInput: this.onLetterInput,
+            wordIndex: i,
+            wordLength: word.length,
+            tutorial
+         }))
       }
    }
 
-   async onLetterInput(letter, wordLength) {
+   async onLetterInput(letter, wordLength, tutorial = undefined) {
       currentLetterIndex.ready = false
-      const result = await verifyGuess(letter, currentLetterIndex.index)
+      const result = tutorial ? tutorial.text[currentLetterIndex.letter] === letter :
+         await verifyGuess(letter, currentLetterIndex.index)
       currentLetterIndex.ready = true
 
       if (!result) return false
@@ -281,15 +310,15 @@ class Receiver {
          currentLetterIndex.word += 1
       }
       if (currentLetterIndex.index === MAX_LENGTH) {
-         endGame()
+         tutorial ? endTutorial() : endGame()
       }
       return true
    }
 }
 
 class Game {
-   async role() {
-      this.userRole = await role()
+   async role(r) {
+      this.userRole = r ?? await role()
       if (this.userRole === "receiver") {
          const showMorse = document.createElement("button")
          showMorse.innerText = "Pokaż wiadomość"
@@ -298,6 +327,87 @@ class Game {
          })
          footer.append(showMorse)
       }
+   }
+
+   async layout() {
+      const container = document.createElement("section")
+
+      const loadingScreen = document.createElement("section")
+      const headerContainer = document.createElement("section")
+      const timer = document.createElement("div")
+      const timerBar = document.createElement("div")
+      const mainContainer = document.createElement("section")
+      const footerContainer = document.createElement("section")
+
+      const asidePointsContainer = document.createElement("section")
+      const scroringTitle = document.createElement("div")
+      const scroringList = document.createElement("div")
+      const scoringData = [
+         { text: "Odszyfrowanie hasła", id: "scoring-point" },
+         { text: "Czas poniżej 5 minut", id: "scoring-time", point: true },
+         { text: "Poniżej 3 błędów", id: "scoring-error", point: true }
+      ]
+
+      const asideTranslationContainer = document.createElement("section")
+      const translationTitle = document.createElement("div")
+      const translationList = document.createElement("div")
+      const translationCover = document.createElement("div")
+
+      container.setAttribute("id", "game-layout")
+
+      loadingScreen.innerText = "Ładowanie..."
+      loadingScreen.setAttribute("id", "loading-screen")
+
+      headerContainer.setAttribute("id", "header")
+      timer.setAttribute("id", "header-timer")
+      timerBar.setAttribute("id", "header-timer-bar")
+      timer.append(timerBar)
+      headerContainer.append(timer)
+
+      mainContainer.setAttribute("id", "main")
+
+      footerContainer.setAttribute("id", "footer")
+
+      asidePointsContainer.classList.add("aside")
+      scroringTitle.innerText = "Punktacja drużyny"
+      scroringTitle.setAttribute("id", "scoring-title")
+      translationList.setAttribute("id", "scoring-list")
+      asidePointsContainer.append(scroringTitle, scroringList)
+      for (const data of scoringData) {
+         const container = document.createElement("div")
+         const text = document.createElement("p")
+         const point = document.createElement("div")
+         container.setAttribute("id", data.id)
+         container.classList.add("scoring-point")
+         text.innerText = data.text
+         point.classList.add("point")
+         if (data.point) point.classList.add("get")
+         point.innerText = "1 PKT"
+         container.append(text, point)
+         asidePointsContainer.append(container)
+      }
+
+      asideTranslationContainer.classList.add("aside")
+      asideTranslationContainer.setAttribute("id", "translation")
+      translationTitle.innerText = "Aflabet Morse'a"
+      translationTitle.setAttribute("id", "translation-title")
+      translationList.setAttribute("id", "translation-list")
+      this.createTranslation(translationList)
+      translationCover.setAttribute("id", "translation-cover")
+      translationCover.classList.add("hidden")
+
+      asideTranslationContainer.append(translationTitle, translationList, translationCover)
+
+      container.append(
+         loadingScreen, headerContainer,
+         mainContainer, footerContainer,
+         asidePointsContainer, asideTranslationContainer)
+      return container
+   }
+
+   async tutorial() {
+      const word = "statek"
+      new Receiver({ text: word })
    }
 
    async init() {
@@ -401,7 +511,7 @@ class Game {
 
    }
 
-   createTranslation() {
+   createTranslation(table) {
       for (const info of MORSE_TRANSLATION) {
          const container = document.createElement("div")
          const letter = document.createElement("div")
@@ -424,7 +534,7 @@ class Game {
          }
 
          container.append(letter, morse)
-         morseTableContainer.append(container)
+         table.append(container)
       }
    }
 
@@ -434,23 +544,150 @@ class Game {
 }
 
 const gameControls = new Game()
-window.addEventListener("load", async () => {
-   await gameControls.role()
-   gameControls.createTranslation()
-   if (await gameStarted()) {
-      await gameControls.start()
-   } else {
-      await gameControls.init()
+
+
+const entryText =
+   `OMNICORP INDUSTRIES (TM) TERMLINK PROTOCOL
+ENTERING MAINTENANCE MODE...
+
+>SET TERMINAL/INQUIRE
+
+RIT-V300
+
+>SET FILE/PROTECTION=OWNER:RWED ACCOUNTS.F
+>SET HALT RESTART/MAINT
+
+INITIALIZING ROBCO INDUSTRIES BOOT AGENT
+LOADING DIAGNOSTIC SUBROUTINES........OK
+CHECKING SECTOR 0x1A4F.................OK
+POTWIERDŹ UŻYWAJĄC "ENTER"
+>`
+
+const tutorialLoadingText =
+   `
+SPRAWDZANIE UPRAWNIEŃ UŻYTKOWNIKA.............OK
+ANALIZA PRZESZKOLENIA UŻYTKOWNIKA.............ERROR
+
+WYSTĄPIŁ BŁĄÐ PODCZAS ANALIZY UMIEJĘTNOŚCI W ZAKRESIE NADAWANIA I ODBIERANIA WIADOMOŚCI
+
+ZE WZGLĘDU NA BRAK INFORMACJI UŻYTKONWIK MUSI PRZEJŚĆ SZKOLENIE
+
+>USE SZKOLENIE.EXE
+
+ŁADOWANIE PROGRAMU SZKOLENIE.EXE......................OK
+WGRYWANIE PROGRAMU DO PAMIĘCI..................OK
+
+ZATWIERDŹ, ABY ROZPOCZĄĆ SZKOLENIE
+
+`
+
+const terminalContainer = document.getElementById("content")
+const cursor = document.createElement("span");
+cursor.className = "cursor";
+let typeTimer = null;
+
+function startTyping(text, checkpointClass, speed = 1) {
+   clearTimeout(typeTimer);
+   terminalContainer.textContent = "";
+   let i = 0;
+   (function type() {
+      terminalContainer.textContent = text.slice(0, i);
+      terminalContainer.append(cursor);
+      if (i++ < text.length) {
+         typeTimer = setTimeout(type, 18 + Math.random() * speed)
+      } else {
+         terminalContainer.classList.add(checkpointClass)
+      }
+   })();
+}
+
+
+
+const screen = document.getElementById("screen")
+const afterglow = document.getElementById("afterglow");
+let isOn = false;
+let busy = false;
+
+function onAnimEnd(name, cb) {
+   function handler(e) {
+      if (e.animationName !== name) return;
+      screen.removeEventListener("animationend", handler);
+      cb();
    }
-   document.getElementById("loadingScreen").classList.add("hidden")
-   setTimeout(() => {
-      document.getElementById("loadingScreen").remove()
-   }, 1000)
-})
+   screen.addEventListener("animationend", handler);
+}
+
+function powerTerminal(onStart) {
+   if (busy) return;
+   busy = true;
+
+   if (isOn) {
+      // turning off
+      clearTimeout(typeTimer);
+      screen.classList.remove("powering-on");
+      screen.classList.add("powering-off");
+
+      onAnimEnd("powerOff", () => {
+         screen.classList.remove("powering-off");
+         screen.classList.add("crt-off");
+         afterglow.classList.remove("show");
+         void afterglow.offsetWidth; // restart animation
+         afterglow.classList.add("show");
+         isOn = false;
+         busy = false;
+      });
+   } else {
+      // turning on
+      afterglow.classList.remove("show");
+      screen.classList.remove("crt-off");
+      screen.classList.add("powering-on");
+
+      onAnimEnd("powerOn", () => {
+         screen.classList.remove("powering-on");
+         isOn = true;
+         busy = false;
+         if (onStart) onStart()
+      });
+   }
+}
 
 window.addEventListener("keypress", (e) => {
+   if (e.code === "Enter" && document.getElementById("start") && !document.getElementById("start").classList.contains("hide")) {
+      document.getElementById("start").classList.add("hide")
+      setTimeout(() => {
+         document.getElementById("start").remove()
+      }, 2000)
+      setTimeout(() => {
+         powerTerminal(() => { startTyping(entryText, "ready-lore") })
+      }, 3000)
+   }
+   if (e.code === "Enter" && terminalContainer.classList.contains("ready-lore")) {
+      terminalContainer.classList.remove("ready-lore")
+      startTyping(tutorialLoadingText, "ready-tutorial")
+   }
+   if (e.code === "Enter" && terminalContainer.classList.contains("ready-tutorial")) {
+      terminalContainer.classList.remove("ready-tutorial")
+      powerTerminal()
+
+      setTimeout(async () => {
+         terminalContainer.innerText = ""
+         powerTerminal()
+         await gameControls.role("sender")
+         // gameControls.createTranslation()
+         terminalContainer.append(await gameControls.layout())
+         await gameControls.tutorial()
+         // if (await gameStarted()) {
+         //    await gameControls.start()
+         // } else {
+         //    await gameControls.init()
+         // }
+         document.getElementById("loading-screen").classList.add("hidden")
+         setTimeout(() => {
+            document.getElementById("loading-screen").remove()
+         }, 1000)
+      }, 1000)
+   }
    if (e.code === "Enter" && document.getElementById("round-title") && !document.getElementById("round-team")) {
-      e.preventDefault()
       document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."
       isPlayerReadyInterval = setInterval(async () => {
          if (await isReady()) {

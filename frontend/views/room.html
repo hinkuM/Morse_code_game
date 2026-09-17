@@ -7,41 +7,26 @@
    <title>Pokój</title>
    <link rel="stylesheet" href="assets/styles/css.css">
    <link rel="stylesheet" href="assets/styles/room.css">
+   <link rel="stylesheet" href="assets/styles/crt_display.css">
    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
 </head>
 
 <body>
-   <div id="loadingScreen">Ładowanie...</div>
-   <header>
-      <div id="header-timer"></div>
-   </header>
-   <aside>
-      <section id="scoring-header">Punktacja drużyny</section>
-      <section id="scoring-list">
-         <div id="scoring-sentence" class="scoring-point">
-            <p>Odszyfrowanie hasła</p>
-            <div class="point">1 PKT</div>
+   <div id="start">
+      Rozpocznij swoją przygodę
+   </div>
+   <div class="bezel">
+      <div class="crt-wrap">
+         <div class="crt fx-scanlines fx-roll fx-noise fx-vignette  fx-blur fx-curve crt-off" id="screen">
+            <div class="crt__content" id="content">
+            </div>
+            <div class="layer layer--scanlines"></div>
+            <div class="layer layer--roll"></div>
+            <div class="layer layer--vignette"></div>
          </div>
-         <div id="scoring-time" class="scoring-point">
-            <p>Czas poniżej 5 minut</p>
-            <div class="point get">1 PKT</div>
-         </div>
-         <div id="scoring-error" class="scoring-point">
-            <p>Poniżej 3 błędów</p>
-            <div class="point get">1 PKT</div>
-         </div>
-      </section>
-
-   </aside>
-   <main></main>
-   <aside id="translation">
-      <section id="translation-header">Alfabet Morse'a</section>
-      <section id="translation-table">
-         <div id="translation-cover" class="hidden"></div>
-
-      </section>
-   </aside>
-   <footer></footer>
+         <div class="afterglow" id="afterglow"></div>
+      </div>
+   </div>
    <script type="module" src="assets/modules/room.js"></script>
 </body>
 

@@ -12,4 +12,12 @@
    /* correct / done */
    --err: #d9534f;
    /* wrong guess */
+
+   --panel-bg: #161a18;
+   --panel-line: #2a322d;
+   --ink: #cfd8d2;
+   --ink-dim: #8c9791;
+   --accent: #38ff9e;
+
+   --phosphor: #33ff88;
 }
