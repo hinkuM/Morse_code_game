@@ -3,7 +3,7 @@ import {
    startTime, errors, isReady, gameStarted, finish, progress, restart
 } from "./api.js"
 
-const header = document.querySelector("header")
+const headerTimer = document.getElementById("header-timer")
 const main = document.querySelector("main")
 const footer = document.querySelector("footer")
 const morseTableContainer = document.getElementById("translation-table")
@@ -36,16 +36,6 @@ const MORSE_TRANSLATION = [
    { letter: "X", morse: "᠆ • • ᠆" },
    { letter: "Y", morse: "᠆ • ᠆ ᠆" },
    { letter: "Z", morse: "᠆ ᠆ • •" },
-   { letter: "1", morse: "• ᠆ ᠆ ᠆ ᠆", number: true },
-   { letter: "2", morse: "• • ᠆ ᠆ ᠆", number: true },
-   { letter: "3", morse: "• • • ᠆ ᠆", number: true },
-   { letter: "4", morse: "• • • • ᠆", number: true },
-   { letter: "5", morse: "• • • • •", number: true },
-   { letter: "6", morse: "᠆ • • • •", number: true },
-   { letter: "7", morse: "᠆ ᠆ • • •", number: true },
-   { letter: "8", morse: "᠆ ᠆ ᠆ • •", number: true },
-   { letter: "9", morse: "᠆ ᠆ ᠆ ᠆ •", number: true },
-   { letter: "0", morse: "᠆ ᠆ ᠆ ᠆ ᠆", number: true },
 ]
 const MORSE_TRANSLATION_MAP = new Map(MORSE_TRANSLATION.map((el) => [el.letter, el.morse]))
 let MAX_LENGTH
@@ -317,7 +307,7 @@ class Game {
          const name = document.createElement("input")
          const send = document.createElement("button")
 
-         container.setAttribute("id", "round")
+         container.setAttribute("id", "round-team")
 
          title.setAttribute("id", "round-title")
          title.innerText = "Wpisz nazwę drużyny"
@@ -382,7 +372,7 @@ class Game {
          const time = Date.now() - startDate - 5000
          const seconds = Math.floor(time / 1000) % 60
          const minutes = Math.floor(Math.floor(time / 1000) / 60)
-         header.innerText = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
+         headerTimer.innerText = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
          if (time > MAX_TIME) {
             document.getElementById("scoring-time").classList.add("lose")
          }
@@ -418,12 +408,20 @@ class Game {
          const morse = document.createElement("div")
 
          container.classList.add("translation-block")
-         if (info?.number) container.classList.add("number")
          container.setAttribute("id", info.letter)
          letter.classList.add("letter")
          letter.innerText = info.letter
          morse.classList.add("morse")
-         morse.innerText = info.morse
+         for (let i = 0; i < info.morse.length; i++) {
+            const symbol = document.createElement("span")
+            console.log(info.morse[i]);
+            if (info.morse[i] === "•") {
+               symbol.classList.add("morse-dot")
+            } else if (info.morse[i] === "᠆") {
+               symbol.classList.add("morse-dash")
+            }
+            morse.append(symbol)
+         }
 
          container.append(letter, morse)
          morseTableContainer.append(container)
@@ -451,7 +449,7 @@ window.addEventListener("load", async () => {
 })
 
 window.addEventListener("keypress", (e) => {
-   if (e.code === "Enter" && document.getElementById("round-title")) {
+   if (e.code === "Enter" && document.getElementById("round-title") && !document.getElementById("round-team")) {
       e.preventDefault()
       document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."
       isPlayerReadyInterval = setInterval(async () => {

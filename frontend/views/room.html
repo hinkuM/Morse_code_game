@@ -12,18 +12,30 @@
 
 <body>
    <div id="loadingScreen">Ładowanie...</div>
-   <header></header>
+   <header>
+      <div id="header-timer"></div>
+   </header>
    <aside>
-      <section id="scoring">
-         <div id="scoring-title">Twoja drużyna otrzyma punkty za:</div>
-         <div id="scoring-sentence" class="scoring-list">Odszyfrowanie hasła - 1 punkt</div>
-         <div id="scoring-time" class="scoring-list get">Ukończenie zadanie poniżej 5 minut - 1 punkt</div>
-         <div id="scoring-error" class="scoring-list get">Brak jakichkolwiek błędów - 1 punkt</div>
+      <section id="scoring-header">Punktacja drużyny</section>
+      <section id="scoring-list">
+         <div id="scoring-sentence" class="scoring-point">
+            <p>Odszyfrowanie hasła</p>
+            <div class="point">1 PKT</div>
+         </div>
+         <div id="scoring-time" class="scoring-point">
+            <p>Czas poniżej 5 minut</p>
+            <div class="point get">1 PKT</div>
+         </div>
+         <div id="scoring-error" class="scoring-point">
+            <p>Poniżej 3 błędów</p>
+            <div class="point get">1 PKT</div>
+         </div>
       </section>
 
    </aside>
    <main></main>
-   <aside>
+   <aside id="translation">
+      <section id="translation-header">Alfabet Morse'a</section>
       <section id="translation-table">
          <div id="translation-cover" class="hidden"></div>
 

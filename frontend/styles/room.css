@@ -1,8 +1,31 @@
 body {
+   margin: 0;
+   padding: 20px;
    height: 100vh;
    display: grid;
-   grid-template-columns: 400px calc(100% - 800px) 400px;
-   grid-template-rows: 100px auto 250px;
+   grid-template-columns: 400px auto 400px;
+   grid-template-rows: 10vw auto 15vw;
+   background-color: var(--bg);
+}
+
+.morse-dot,
+.morse-dash {
+   display: inline-block;
+   vertical-align: middle;
+   background-color: var(--fg);
+}
+
+.morse-dot {
+   width: 6px;
+   height: 6px;
+   border-radius: 50%;
+   margin: 0 2px;
+}
+
+.morse-dash {
+   width: 16px;
+   height: 4px;
+   margin: 0 2px;
 }
 
 #loadingScreen {
@@ -10,11 +33,13 @@ body {
    justify-content: center;
    align-items: center;
    position: absolute;
+   top: 0;
+   left: 0;
    z-index: 5;
    width: 100%;
    height: 100%;
-   background-color: var(--grey);
-   color: var(--foreground-light);
+   background-color: var(--dim);
+   color: var(--fg);
    font-size: 48px;
    transition: opacity 1s;
    opacity: 1;
@@ -25,62 +50,83 @@ body {
 }
 
 header {
-   height: 100%;
-   width: 100%;
    grid-row: 1;
    grid-column-start: 2;
    grid-column-end: 3;
-   color: var(--foreground-light);
-   font-size: 40px;
    display: flex;
    justify-content: center;
    align-items: center;
+   border-top: 2px solid var(--line-strong);
+}
+
+#header-timer {
+   color: var(--fg);
+   font-size: 48px;
+   border: 2px solid var(--line-strong);
+   padding: 10px 30px;
 }
 
 aside {
-   height: 100%;
-   width: 100%;
    grid-row: 1 / span 3;
    position: relative;
+   border: 2px solid var(--line-strong);
+   padding: 30px;
 }
 
-#scoring {
+#scoring-header {
+   font-size: 20px;
+   color: var(--fg);
+   border-bottom: 2px solid var(--line-strong);
+   padding-bottom: 10px;
+}
+
+#scoring-list {
+   box-sizing: content-box;
    display: flex;
    flex-direction: column;
-   justify-content: left;
-   gap: 20px;
-   padding-left: 32px;
-   padding-top: 24px;
-   height: auto;
+   color: var(--fg);
+   margin-top: 10px;
 }
 
-.scoring-list {
+.scoring-point {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   padding: 6px;
    font-size: 16px;
-   color: var(--light-grey);
+   color: var(--fg);
    text-align: left;
+   border-bottom: 2px solid var(--line);
 }
 
-.scoring-list.get {
-   color: var(--green)
+.point {
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   border: 2px solid var(--line);
+   width: 60px;
+   height: 30px;
+   padding: 0 5px;
+   font-size: 12px;
+   font-weight: bold;
 }
 
-.scoring-list.lose {
-   color: var(--red)
+.point.get {
+   color: var(--ok);
+   border-color: var(--ok);
 }
 
-#scoring-title {
-   color: var(--foreground-light);
-   font-size: 32px;
+.point.lose {
+   color: var(--err);
+   border-color: var(--err);
 }
 
 main {
-   height: 100%;
-   width: 100%;
    display: flex;
    justify-content: center;
    align-items: center;
    flex-direction: column;
-   gap: 40px;
+   gap: 20px;
    padding: 20px;
    grid-row: 2;
    grid-column: 2;
@@ -90,11 +136,17 @@ footer {
    display: flex;
    align-items: center;
    justify-content: center;
-   height: 100%;
-   width: 100%;
    grid-row: 3;
    grid-column-start: 2;
    grid-column-end: 3;
+   border-bottom: 2px solid var(--line-strong);
+}
+
+#translation-header {
+   font-size: 20px;
+   color: var(--fg);
+   border-bottom: 2px solid var(--line-strong);
+   padding-bottom: 10px;
 }
 
 #translation-table {
@@ -103,31 +155,21 @@ footer {
    display: flex;
    flex-direction: column;
    flex-wrap: wrap;
-   width: 375px;
-   height: calc(600px - 12px);
-   position: absolute;
-   top: calc(50% - 300px - 6px);
-   bottom: 0;
-   right: 0;
-   border: 2px solid var(--border-light);
-   border-right: none;
-   color: var(--foreground-light);
+   height: 494px;
+   color: var(--fg);
+   margin-top: 10px;
 }
 
 .translation-block {
    display: flex;
+   justify-content: center;
+   align-items: center;
    flex-direction: row;
-   width: 125px;
-   height: 50px;
-   border: 1px solid var(--border);
-   margin-top: -1px;
-   margin-left: -1px;
-   background-color: var(--background);
-}
-
-
-.translation-block.number {
-   border-color: var(--orange);
+   height: 36px;
+   border-bottom: 2px solid var(--line);
+   background-color: inherit;
+   margin-right: 10px;
+   margin-left: 10px;
 }
 
 .translation-block.hint {
@@ -138,7 +180,7 @@ footer {
 .translation-block .letter {
    text-align: center;
    width: 57px;
-   font-size: 30px;
+   font-size: 20px;
    padding: 4px;
 }
 
@@ -172,12 +214,11 @@ footer {
    justify-content: center;
    align-items: center;
    margin: auto;
-   width: 40vw;
-   height: 120px;
-   border: 2px solid var(--border-light);
-   border-radius: var(--radius);
-   color: var(--grey);
-   font-size: 40px;
+   width: 20vw;
+   height: 100px;
+   background-color: var(--dim);
+   color: var(--bg);
+   font-size: 30px;
 }
 
 #waiting {
@@ -195,20 +236,28 @@ footer {
 .word {
    display: flex;
    flex-direction: row;
-   gap: 20px;
+   gap: 10px;
 }
 
 .placeholder {
-   width: 50px;
-   height: 70px;
-   border: 2px solid var(--border);
-   background-color: transparent;
-   caret-color: var(--white);
-   color: var(--foreground-light);
-   font-size: 38px;
+   width: 60px;
+   height: 60px;
+   border: 2px solid var(--line-strong);
+   background-color: var(--panel);
+   caret-color: var(--fg);
+   color: var(--line-strong);
+   font-size: 28px;
    text-align: center;
    outline: none;
    cursor: default;
+}
+
+.placeholder::placeholder {
+   color: var(--line-strong);
+}
+
+.placeholder.active::placeholder {
+   color: var(--bg);
 }
 
 .hover {
@@ -225,8 +274,9 @@ footer {
 }
 
 .active {
-   border-color: var(--orange);
-   /* background-color: var(--surface); */
+   border-color: var(--accent);
+   background-color: var(--accent);
+   color: var(--bg);
 }
 
 .incorrect {
@@ -234,6 +284,7 @@ footer {
 }
 
 #round,
+#round-team,
 #end {
    display: flex;
    flex-direction: column;
@@ -250,6 +301,7 @@ footer {
    outline: none;
 }
 
+#round-team::backdrop,
 #round::backdrop,
 #end::backdrop {
    background-color: var(--background);
