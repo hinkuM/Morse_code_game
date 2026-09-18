@@ -45,6 +45,7 @@ let timeCheckerInterval
 let progressTracker
 let teamName
 let errorTracker
+let errroIndicatorTimeout
 
 function LetterPlaceholder({ onLetterInput, wordIndex, wordLength, word = undefined, tutorial = undefined } = {}) {
    const container = document.createElement("section")
@@ -92,9 +93,7 @@ function LetterPlaceholder({ onLetterInput, wordIndex, wordLength, word = undefi
          }
 
          const result = await onLetterInput(letter, word ?? wordLength, tutorial)
-         input.classList.add("incorrect")
          if (result) {
-            input.classList.remove("incorrect")
             input.classList.add("correct")
             input.classList.remove("active")
             input.blur()
@@ -102,7 +101,11 @@ function LetterPlaceholder({ onLetterInput, wordIndex, wordLength, word = undefi
                document.getElementById("word" + currentLetterIndex.word).children[currentLetterIndex.letter].focus()
             }
          } else {
-            document.getElementById("scoring-error").classList.add("lose")
+            input.classList.add("incorrect")
+            errroIndicatorTimeout = setTimeout(() => {
+               input.classList.remove("incorrect")
+            }, 500)
+            document.querySelectorAll(".scoring-icons.hidden")[0].classList.remove("hidden")
          }
       })
       container.append(input)
@@ -160,6 +163,7 @@ function endTutorial() {
    start.addEventListener("click", async () => {
       return
    })
+   document.getElementById("progress-numbers").innerText = "1 / 1"
 
    container.append(title, start)
    document.body.append(container)
@@ -175,6 +179,7 @@ class Sender {
       const fullSentence = await sentence()
       const words = (fullSentence).split(" ")
       MAX_LENGTH = fullSentence.replace(" ", "").length
+      const main = document.getElementById("main")
 
       for (let i = 0; i < words.length; i++) {
          const word = words[i]
@@ -284,6 +289,7 @@ class Receiver {
       const fullSentence = tutorial.text ?? await sentence()
       const words = (fullSentence).split(" ")
       MAX_LENGTH = fullSentence.replace(" ", "").length
+      const main = document.getElementById("main")
 
       for (let i = 0; i < words.length; i++) {
          const word = words[i]
@@ -298,7 +304,7 @@ class Receiver {
 
    async onLetterInput(letter, wordLength, tutorial = undefined) {
       currentLetterIndex.ready = false
-      const result = tutorial ? tutorial.text[currentLetterIndex.letter] === letter :
+      const result = tutorial ? tutorial.text[currentLetterIndex.letter].toUpperCase() === letter.toUpperCase() :
          await verifyGuess(letter, currentLetterIndex.index)
       currentLetterIndex.ready = true
 
@@ -331,83 +337,166 @@ class Game {
 
    async layout() {
       const container = document.createElement("section")
-
-      const loadingScreen = document.createElement("section")
-      const headerContainer = document.createElement("section")
-      const timer = document.createElement("div")
-      const timerBar = document.createElement("div")
-      const mainContainer = document.createElement("section")
-      const footerContainer = document.createElement("section")
-
-      const asidePointsContainer = document.createElement("section")
-      const scroringTitle = document.createElement("div")
-      const scroringList = document.createElement("div")
-      const scoringData = [
-         { text: "Odszyfrowanie hasła", id: "scoring-point" },
-         { text: "Czas poniżej 5 minut", id: "scoring-time", point: true },
-         { text: "Poniżej 3 błędów", id: "scoring-error", point: true }
-      ]
-
-      const asideTranslationContainer = document.createElement("section")
-      const translationTitle = document.createElement("div")
-      const translationList = document.createElement("div")
-      const translationCover = document.createElement("div")
-
       container.setAttribute("id", "game-layout")
 
-      loadingScreen.innerText = "Ładowanie..."
-      loadingScreen.setAttribute("id", "loading-screen")
+      // loading screen
+      {
+         const loadingScreen = document.createElement("section")
+         loadingScreen.innerText = "Ładowanie..."
+         loadingScreen.setAttribute("id", "loading-screen")
+         container.append(loadingScreen)
+      }
+      // header
+      {
+         const headerContainer = document.createElement("section")
+         const timer = document.createElement("div")
+         const timerBar = document.createElement("div")
+         headerContainer.setAttribute("id", "header")
+         timer.setAttribute("id", "header-timer")
+         timerBar.setAttribute("id", "header-timer-bar")
+         timer.append(timerBar)
+         headerContainer.append(timer)
+         container.append(headerContainer)
+      }
+      // main
+      {
+         const mainContainer = document.createElement("section")
+         mainContainer.setAttribute("id", "main")
+         container.append(mainContainer)
+      }
+      // footer
+      {
+         const footerContainer = document.createElement("section")
+         footerContainer.setAttribute("id", "footer")
+         container.append(footerContainer)
+      }
+      // aside left
+      {
+         const asideLeft = document.createElement("section")
+         const asidePointsContainer = document.createElement("section")
+         const scroringTitle = document.createElement("div")
+         const scroringList = document.createElement("div")
+         const asideProgressContainer = document.createElement("section")
+         const progressTitle = document.createElement("section")
+         const progressNumbers = document.createElement("section")
 
-      headerContainer.setAttribute("id", "header")
-      timer.setAttribute("id", "header-timer")
-      timerBar.setAttribute("id", "header-timer-bar")
-      timer.append(timerBar)
-      headerContainer.append(timer)
+         asideLeft.classList.add("aside")
+         asideLeft.style.justifyContent = "space-between"
 
-      mainContainer.setAttribute("id", "main")
+         asidePointsContainer.classList.add("aside-block")
+         scroringTitle.innerText = "Uszkodzone systemy"
+         scroringTitle.setAttribute("id", "scoring-title")
+         scroringList.setAttribute("id", "scoring-list")
+         asidePointsContainer.append(scroringTitle, scroringList)
+         for (let i = 0; i < 3; i++) {
+            const container = document.createElement("div")
+            const fireIcon = document.createElement("div")
+            const serverIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+            function* iconRectIterator() {
+               for (let i = 0; i < 3; i++) {
+                  yield {
+                     type: "rect", values: new Map([
+                        ["x", "6"],
+                        ["y", 6 + i * 18],
+                        ["width", "38"],
+                        ["height", "12"],
+                        ["rx", "3"],
+                        ["fill", "#4a90d9"],
+                     ])
+                  }
 
-      footerContainer.setAttribute("id", "footer")
+               }
+            }
+            function* iconCircleIterator() {
+               for (let i = 0; i < 3; i++) {
+                  yield {
+                     type: "circle", values: new Map([
+                        ["cx", "36"],
+                        ["cy", 12 + i * 18],
+                        ["r", "3"],
+                        ["fill", "#f31212"],
+                     ])
+                  }
+               }
+            }
+            const serverData = [
+               {
+                  type: "rect", values: new Map([
+                     ["x", "0"],
+                     ["y", "0"],
+                     ["width", "50"],
+                     ["height", "60"],
+                     ["rx", "6"],
+                     ["fill", "#f2f2f2"],
+                     ["stroke", "#ccc"],
+                     ["stroke-width", "1"],
+                  ])
+               },
+               ...iconCircleIterator(),
+               ...iconRectIterator()
+            ]
 
-      asidePointsContainer.classList.add("aside")
-      scroringTitle.innerText = "Punktacja drużyny"
-      scroringTitle.setAttribute("id", "scoring-title")
-      translationList.setAttribute("id", "scoring-list")
-      asidePointsContainer.append(scroringTitle, scroringList)
-      for (const data of scoringData) {
-         const container = document.createElement("div")
-         const text = document.createElement("p")
-         const point = document.createElement("div")
-         container.setAttribute("id", data.id)
-         container.classList.add("scoring-point")
-         text.innerText = data.text
-         point.classList.add("point")
-         if (data.point) point.classList.add("get")
-         point.innerText = "1 PKT"
-         container.append(text, point)
-         asidePointsContainer.append(container)
+            {
+               fireIcon.innerText = "🔥"
+               fireIcon.classList.add("scoring-fire")
+               serverIcon.setAttribute("viewBox", "0 0 50 60")
+               serverIcon.classList.add("scoring-server")
+               for (const info of serverData) {
+                  const icon = document.createElementNS("http://www.w3.org/2000/svg", info.type)
+                  for (const [key, value] of info.values) {
+                     icon.setAttribute(key, value)
+                  }
+                  serverIcon.append(icon)
+               }
+            }
+
+            container.classList.add("hidden")
+            container.classList.add("scoring-icons")
+            container.append(fireIcon, serverIcon)
+            scroringList.append(container)
+         }
+
+         asideProgressContainer.classList.add("aside-block")
+         progressTitle.setAttribute("id", "progress-title")
+         progressTitle.innerText = "Ustabilizowane próbki"
+         progressNumbers.setAttribute("id", "progress-numbers")
+         progressNumbers.innerText = "0 / 1"
+         asideProgressContainer.append(progressTitle, progressNumbers)
+
+         asideLeft.append(asidePointsContainer, asideProgressContainer)
+         container.append(asideLeft)
+      }
+      // aside right
+      {
+         const asideRight = document.createElement("section")
+         const asideTranslationContainer = document.createElement("section")
+         const translationTitle = document.createElement("div")
+         const translationList = document.createElement("div")
+         const translationCover = document.createElement("div")
+
+         asideRight.classList.add("aside")
+         asideRight.style.justifyContent = "center"
+
+         asideTranslationContainer.classList.add("aside-block")
+         asideTranslationContainer.setAttribute("id", "translation")
+         translationTitle.innerText = "Aflabet Morse'a"
+         translationTitle.setAttribute("id", "translation-title")
+         translationList.setAttribute("id", "translation-list")
+         this.createTranslation(translationList)
+         translationCover.setAttribute("id", "translation-cover")
+         translationCover.classList.add("hidden")
+
+         asideTranslationContainer.append(translationTitle, translationList, translationCover)
+         asideRight.append(asideTranslationContainer)
+         container.append(asideRight)
       }
 
-      asideTranslationContainer.classList.add("aside")
-      asideTranslationContainer.setAttribute("id", "translation")
-      translationTitle.innerText = "Aflabet Morse'a"
-      translationTitle.setAttribute("id", "translation-title")
-      translationList.setAttribute("id", "translation-list")
-      this.createTranslation(translationList)
-      translationCover.setAttribute("id", "translation-cover")
-      translationCover.classList.add("hidden")
-
-      asideTranslationContainer.append(translationTitle, translationList, translationCover)
-
-      container.append(
-         loadingScreen, headerContainer,
-         mainContainer, footerContainer,
-         asidePointsContainer, asideTranslationContainer)
       return container
    }
 
    async tutorial() {
-      const word = "statek"
-      new Receiver({ text: word })
+      const word = "ukenium"
+      new Receiver().init({ text: word })
    }
 
    async init() {
@@ -524,7 +613,6 @@ class Game {
          morse.classList.add("morse")
          for (let i = 0; i < info.morse.length; i++) {
             const symbol = document.createElement("span")
-            console.log(info.morse[i]);
             if (info.morse[i] === "•") {
                symbol.classList.add("morse-dot")
             } else if (info.morse[i] === "᠆") {
@@ -673,7 +761,6 @@ window.addEventListener("keypress", (e) => {
          terminalContainer.innerText = ""
          powerTerminal()
          await gameControls.role("sender")
-         // gameControls.createTranslation()
          terminalContainer.append(await gameControls.layout())
          await gameControls.tutorial()
          // if (await gameStarted()) {
@@ -685,7 +772,7 @@ window.addEventListener("keypress", (e) => {
          setTimeout(() => {
             document.getElementById("loading-screen").remove()
          }, 1000)
-      }, 1000)
+      }, 2000)
    }
    if (e.code === "Enter" && document.getElementById("round-title") && !document.getElementById("round-team")) {
       document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."

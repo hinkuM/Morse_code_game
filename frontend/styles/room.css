@@ -3,6 +3,7 @@ body {
    flex-direction: column;
    align-items: center;
    justify-content: center;
+   height: 100vh;
    margin: 0;
    width: 100%;
    padding: 20px;
@@ -117,11 +118,12 @@ body {
    height: 100%;
    width: 70%;
    border-radius: 10px;
-   background-color: #38ff9e;
-   background-image: repeating-linear-gradient(45deg,
-         rgba(255, 255, 255, 0.35) 0,
-         rgba(255, 255, 255, 0.35) 8px,
-         transparent 8px,
+   background-color: transparent;
+   background-image:
+      repeating-linear-gradient(45deg,
+         rgb(229, 0, 0) 0,
+         rgba(255, 0, 0, 0.35) 8px,
+         #d4000000 8px,
          transparent 16px);
    transition: width 0.3s ease;
 }
@@ -154,9 +156,17 @@ body {
 
 .aside {
    grid-row: 1 / span 3;
-   position: relative;
+   height: 100%;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+}
+
+.aside-block {
    border: 2px solid var(--line-strong);
    padding: 16px;
+   position: relative;
+   width: 100%;
 }
 
 /* ASIDE - TRANSLATIONS */
@@ -227,7 +237,7 @@ body {
    padding: 4px;
 }
 
-/* ASIDE - SCORING # LATER LIFES */
+/* ASIDE - SCORING / LIFES */
 
 #scoring-title {
    font-size: 20px;
@@ -239,47 +249,58 @@ body {
 #scoring-list {
    box-sizing: content-box;
    display: flex;
-   flex-direction: column;
+   flex-direction: row;
    color: var(--fg);
    margin-top: 10px;
+   justify-content: space-around;
 }
 
-.scoring-point {
+.scoring-icons {
+   position: relative;
    display: flex;
-   align-items: center;
-   justify-content: space-between;
-   padding: 6px;
-   font-size: 16px;
+   justify-content: center;
+   align-items: end;
+   height: 100px;
+   filter: brightness(100%);
+
+}
+
+.scoring-icons.hidden {
+   filter: brightness(0%);
+}
+
+.scoring-fire {
+   bottom: -4px;
+   position: absolute;
+   font-size: 75px;
+   z-index: 1;
+   text-align: center;
+}
+
+.scoring-server {
+   width: 40px;
+   height: 60px;
+   z-index: 2;
+}
+
+/* ASIDE - PROGRESS */
+
+#progress-title {
+   font-size: 20px;
    color: var(--fg);
-   text-align: left;
-   border-bottom: 2px solid var(--line);
+   border-bottom: 2px solid var(--line-strong);
+   padding-bottom: 10px;
 }
 
-.scoring-point:last-child {
-   border: none;
-}
-
-.point {
+#progress-numbers {
+   font-size: 48px;
+   color: var(--fg);
+   padding: 40px 0;
    display: flex;
    justify-content: center;
    align-items: center;
-   border: 2px solid var(--line);
-   width: 60px;
-   height: 30px;
-   padding: 0 5px;
-   font-size: 12px;
-   font-weight: bold;
 }
 
-.point.get {
-   color: var(--ok);
-   border-color: var(--ok);
-}
-
-.point.lose {
-   color: var(--err);
-   border-color: var(--err);
-}
 
 #input-bar {
    display: flex;
@@ -317,7 +338,7 @@ body {
    border: 2px solid var(--line-strong);
    background-color: var(--panel);
    caret-color: var(--fg);
-   color: var(--line-strong);
+   color: var(--fg);
    font-size: 28px;
    text-align: center;
    outline: none;
@@ -329,30 +350,24 @@ body {
 }
 
 .placeholder.active::placeholder {
-   color: var(--bg);
-}
-
-.hover {
-   background-color: var(--surface);
-   cursor: pointer;
-}
-
-.ready {
-   border-color: var(--white);
+   color: var(--line-strong);
 }
 
 .correct {
-   border-color: var(--green);
-}
-
-.active {
-   border-color: var(--accent);
-   background-color: var(--accent);
+   background-color: var(--ok);
    color: var(--bg);
 }
 
+.active {
+   border-color: var(--fg);
+   color: var(--fg);
+}
+
 .incorrect {
-   border-color: var(--red);
+   border-color: var(--err);
+   background-color: var(--err);
+   color: var(--fg);
+   transition: border-color, background-color 0.5s;
 }
 
 #round,
