@@ -4,10 +4,7 @@ import {
 } from "./api.js"
 
 const headerTimer = document.getElementById("header-timer")
-const main = document.querySelector("main")
 const footer = document.querySelector("footer")
-const morseTableContainer = document.getElementById("translation-table")
-const scoringContainer = document.getElementById("scoring")
 const MAX_TIME = 5 * 60 * 1000
 const MORSE_TRANSLATION = [
    { letter: "A", morse: "• ᠆" },
@@ -47,6 +44,31 @@ let teamName
 let errorTracker
 let errroIndicatorTimeout
 
+function popUp({ x, y, titl, txt, height, width }) {
+   const background = document.createElement("div")
+   const container = document.createElement("div")
+   const title = document.createElement("div")
+   const text = document.createElement("div")
+
+   background.setAttribute("id", "window-background")
+   container.setAttribute("id", "window")
+   container.style.width = width + "px"
+   container.style.height = height + "px"
+   container.style.top = y + "px"
+   if (y === -1) {
+      container.style.top = "calc(50% - " + height / 2 + "px)"
+   }
+   container.style.left = x + "px"
+   if (x === -1) {
+      container.style.left = "calc(50% - " + width / 2 + "px)"
+   }
+   title.innerText = titl
+   text.innerText = txt
+   container.append(title, text)
+   background.append(container)
+   terminalContainer.append(background)
+}
+
 function LetterPlaceholder({ onLetterInput, wordIndex, wordLength, word = undefined, tutorial = undefined } = {}) {
    const container = document.createElement("section")
    container.classList.add("word")
@@ -75,7 +97,9 @@ function LetterPlaceholder({ onLetterInput, wordIndex, wordLength, word = undefi
          input.classList.add("active")
       })
       input.addEventListener("blur", (e) => {
-         input.classList.remove("active")
+         if (input.classList.contains("correct")) return
+         e.preventDefault()
+         input.focus()
       })
       input.addEventListener("input", async (e) => {
          input.value = input.value.toUpperCase()
@@ -151,22 +175,16 @@ async function endGame() {
 }
 
 function endTutorial() {
-   const container = document.createElement("div")
-   const title = document.createElement("div")
-   const start = document.createElement("button")
-
-   container.setAttribute("id", "end")
-
-   title.setAttribute("id", "end-title")
-   title.innerText = "Ukończyłeś szkolenie!"
-   start.innerText = "dalej"
-   start.addEventListener("click", async () => {
-      return
-   })
+   popUp(
+      {
+         x: -1, y: -1,
+         height: 250,
+         width: 340,
+         titl: "Ukończyłeś szkolenie!",
+         txt: "Zatwierdź, aby przejść dalej"
+      })
    document.getElementById("progress-numbers").innerText = "1 / 1"
-
-   container.append(title, start)
-   document.body.append(container)
+   terminalContainer.classList.add("end-tutorial")
 }
 
 class Sender {
@@ -300,6 +318,7 @@ class Receiver {
             tutorial
          }))
       }
+      document.querySelectorAll(".placeholder")[0].focus()
    }
 
    async onLetterInput(letter, wordLength, tutorial = undefined) {
@@ -325,14 +344,6 @@ class Receiver {
 class Game {
    async role(r) {
       this.userRole = r ?? await role()
-      if (this.userRole === "receiver") {
-         const showMorse = document.createElement("button")
-         showMorse.innerText = "Pokaż wiadomość"
-         showMorse.addEventListener("click", () => {
-            gameControls.playCurrentLetter()
-         })
-         footer.append(showMorse)
-      }
    }
 
    async layout() {
@@ -368,6 +379,20 @@ class Game {
       {
          const footerContainer = document.createElement("section")
          footerContainer.setAttribute("id", "footer")
+         if (this.userRole === "receiver") {
+            const lights = document.createElement("div")
+            const title = document.createElement("div")
+            const messageContainer = document.createElement("div")
+            const morseContainer = document.createElement("div")
+            title.innerText = "Sygnał"
+            title.setAttribute("id", "lights-title")
+            lights.setAttribute("id", "lights")
+            lights.classList.add("aside-block")
+            messageContainer.setAttribute("id", "lights-message")
+            morseContainer.setAttribute("id", "lights-morse")
+            lights.append(title, messageContainer, morseContainer)
+            footerContainer.append(lights)
+         }
          container.append(footerContainer)
       }
       // aside left
@@ -497,6 +522,12 @@ class Game {
    async tutorial() {
       const word = "ukenium"
       new Receiver().init({ text: word })
+      document.getElementById("lights-message").classList.add("on")
+      progressTracker = setInterval(async () => {
+         const guessed = document.querySelectorAll(".placeholder.correct").length
+         if (guessed >= word.length) clearInterval(progressTracker)
+         this.playMessage(word[guessed])
+      }, 1000)
    }
 
    async init() {
@@ -525,6 +556,34 @@ class Game {
       } else {
          this.readyDialog()
       }
+   }
+
+   playMessage(letter) {
+      if (this.playing) return
+      this.playing = true
+      const morseLight = document.getElementById("lights-morse")
+      const morseCode = MORSE_TRANSLATION_MAP.get(letter.toUpperCase())
+      const blinking = []
+      for (let i = 0; i < morseCode.length; i++) {
+         if (morseCode[i] === "•") {
+            blinking.push(250)
+         } else if (morseCode[i] === "᠆") {
+            blinking.push(750)
+         }
+      }
+      let counter = 0
+      for (const time of blinking) {
+         setTimeout(() => {
+            morseLight.classList.add("on")
+            setTimeout(() => {
+               morseLight.classList.remove("on")
+            }, time)
+         }, counter)
+         counter += time + 200
+      }
+      setTimeout(() => {
+         this.playing = false
+      }, counter + 2000)
    }
 
    readyDialog() {
@@ -760,7 +819,7 @@ window.addEventListener("keypress", (e) => {
       setTimeout(async () => {
          terminalContainer.innerText = ""
          powerTerminal()
-         await gameControls.role("sender")
+         await gameControls.role("receiver")
          terminalContainer.append(await gameControls.layout())
          await gameControls.tutorial()
          // if (await gameStarted()) {
@@ -773,6 +832,27 @@ window.addEventListener("keypress", (e) => {
             document.getElementById("loading-screen").remove()
          }, 1000)
       }, 2000)
+   }
+   if (e.code === "Enter" && terminalContainer.classList.contains("end-tutorial")) {
+      terminalContainer.classList.remove("end-tutorial")
+      powerTerminal()
+
+      // setTimeout(async () => {
+      //    terminalContainer.innerText = ""
+      //    powerTerminal()
+      //    await gameControls.role("sender")
+      //    terminalContainer.append(await gameControls.layout())
+      //    await gameControls.tutorial()
+      //    // if (await gameStarted()) {
+      //    //    await gameControls.start()
+      //    // } else {
+      //    //    await gameControls.init()
+      //    // }
+      //    document.getElementById("loading-screen").classList.add("hidden")
+      //    setTimeout(() => {
+      //       document.getElementById("loading-screen").remove()
+      //    }, 1000)
+      // }, 2000)
    }
    if (e.code === "Enter" && document.getElementById("round-title") && !document.getElementById("round-team")) {
       document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."

@@ -152,6 +152,44 @@ body {
    grid-column-end: 3;
 }
 
+#lights {
+   position: relative;
+   width: 160px;
+}
+
+#lights-title {
+   font-size: 20px;
+   color: var(--fg);
+   border-bottom: 2px solid var(--line-strong);
+   padding-bottom: 10px;
+}
+
+#lights-morse {
+   width: 120px;
+   height: 120px;
+   border-radius: 80px;
+   border: 4px solid var(--line-strong);
+}
+
+#lights-message {
+   position: absolute;
+   top: 0;
+   right: 0;
+   width: 40px;
+   height: 40px;
+   border-radius: 70px;
+   border: 4px solid var(--line-strong);
+   transition: background-color 0.2s;
+}
+
+#lights-morse.on {
+   background-color: var(--accent);
+}
+
+#lights-message.on {
+   background-color: var(--err);
+}
+
 /* ASIDE */
 
 .aside {
@@ -370,6 +408,28 @@ body {
    transition: border-color, background-color 0.5s;
 }
 
+#window-background {
+   position: absolute;
+   width: 100%;
+   height: 100%;
+   top: 0;
+   left: 0;
+   background-color: var(--bg);
+}
+
+#window {
+   position: absolute;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+   color: var(--fg);
+   background-color: var(--bg);
+   border: 1px solid var(--line-strong);
+   font-size: 28px;
+   text-align: center;
+}
+
 #round,
 #round-team,
 #end {
@@ -378,8 +438,6 @@ body {
    flex-direction: column;
    align-items: center;
    justify-content: center;
-   width: 340px;
-   height: 250px;
    color: var(--foreground-light);
    background-color: var(--background);
    border: 1px solid var(--foreground-light);
