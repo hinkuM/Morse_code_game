@@ -48,7 +48,7 @@ body {
    position: absolute;
    top: 0;
    left: 0;
-   z-index: 5;
+   z-index: 2;
    width: 100%;
    height: 100%;
    background-color: var(--dim);
@@ -92,7 +92,7 @@ body {
    justify-content: center;
    align-items: center;
    grid-template-columns: 25% 50% 25%;
-   grid-template-rows: 10% 75% 15%;
+   grid-template-rows: 10% 65% 25%;
 }
 
 /* HEADER */
@@ -112,17 +112,17 @@ body {
    border: 2px solid var(--line-strong);
    width: 50%;
    height: 60px;
+   padding: 3px;
 }
 
 #header-timer-bar {
    height: 100%;
-   width: 70%;
-   border-radius: 10px;
+   width: 100%;
    background-color: transparent;
    background-image:
       repeating-linear-gradient(45deg,
-         rgb(229, 0, 0) 0,
-         rgba(255, 0, 0, 0.35) 8px,
+         rgb(0, 229, 0) 0,
+         rgba(0, 255, 0, 0.35) 8px,
          #d4000000 8px,
          transparent 16px);
    transition: width 0.3s ease;
@@ -154,7 +154,7 @@ body {
 
 #lights {
    position: relative;
-   width: 160px;
+   width: 180px;
 }
 
 #lights-title {
@@ -169,17 +169,19 @@ body {
    height: 120px;
    border-radius: 80px;
    border: 4px solid var(--line-strong);
+   margin: auto;
+   margin-top: 15px;
 }
 
 #lights-message {
    position: absolute;
-   top: 0;
-   right: 0;
-   width: 40px;
-   height: 40px;
+   top: 15px;
+   right: 15px;
+   width: 25px;
+   height: 25px;
    border-radius: 70px;
    border: 4px solid var(--line-strong);
-   transition: background-color 0.2s;
+   transition: background-color 0.1s;
 }
 
 #lights-morse.on {
@@ -296,29 +298,16 @@ body {
 .scoring-icons {
    position: relative;
    display: flex;
-   justify-content: center;
-   align-items: end;
-   height: 100px;
    filter: brightness(100%);
-
 }
 
 .scoring-icons.hidden {
    filter: brightness(0%);
 }
 
-.scoring-fire {
-   bottom: -4px;
-   position: absolute;
-   font-size: 75px;
-   z-index: 1;
-   text-align: center;
-}
-
 .scoring-server {
-   width: 40px;
-   height: 60px;
-   z-index: 2;
+   width: 70px;
+   height: 70px;
 }
 
 /* ASIDE - PROGRESS */
@@ -373,14 +362,21 @@ body {
 .placeholder {
    width: 60px;
    height: 60px;
-   border: 2px solid var(--line-strong);
-   background-color: var(--panel);
+   border: 2px solid var(--err);
+   background-color: var(--err);
    caret-color: var(--fg);
    color: var(--fg);
    font-size: 28px;
    text-align: center;
    outline: none;
    cursor: default;
+   transition: border-color, background-color 0.1s;
+}
+
+.placeholder.ready {
+   background-color: var(--panel);
+   border-color: var(--line-strong);
+   transition: border-color, background-color 1s;
 }
 
 .placeholder::placeholder {
@@ -391,21 +387,14 @@ body {
    color: var(--line-strong);
 }
 
-.correct {
+.placeholder.correct {
    background-color: var(--ok);
    color: var(--bg);
 }
 
-.active {
+.placeholder.active {
    border-color: var(--fg);
    color: var(--fg);
-}
-
-.incorrect {
-   border-color: var(--err);
-   background-color: var(--err);
-   color: var(--fg);
-   transition: border-color, background-color 0.5s;
 }
 
 #window-background {
@@ -414,6 +403,7 @@ body {
    height: 100%;
    top: 0;
    left: 0;
+   z-index: 3;
    background-color: var(--bg);
 }
 
@@ -422,12 +412,13 @@ body {
    display: flex;
    flex-direction: column;
    align-items: center;
-   justify-content: center;
+   justify-content: space-around;
    color: var(--fg);
    background-color: var(--bg);
    border: 1px solid var(--line-strong);
    font-size: 28px;
    text-align: center;
+   padding: 20px;
 }
 
 #round,

@@ -8,6 +8,7 @@
    <link rel="stylesheet" href="assets/styles/css.css">
    <link rel="stylesheet" href="assets/styles/room.css">
    <link rel="stylesheet" href="assets/styles/crt_display.css">
+   <link rel="stylesheet" href="assets/styles/paper.css">
    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
 </head>
 
@@ -18,7 +19,7 @@
    <div class="bezel">
       <div class="crt-wrap">
          <div class="crt fx-scanlines fx-roll fx-noise fx-vignette  fx-blur fx-curve crt-off" id="screen">
-            <div class="crt__content" id="content">
+            <div id="content">
             </div>
             <div class="layer layer--scanlines"></div>
             <div class="layer layer--roll"></div>
@@ -27,6 +28,14 @@
          <div class="afterglow" id="afterglow"></div>
       </div>
    </div>
+   <div class="paper">
+      <div class="tape"></div>
+      <h3>STEROWANIE</h3>
+      <p>Enter - zatwierdź</p>
+      <p>Backspace - usuń</p>
+      <p>Spacja - wyślij sygnał</p>
+   </div>
+
    <script type="module" src="assets/modules/room.js"></script>
 </body>
 
