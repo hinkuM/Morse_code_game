@@ -1,0 +1,7 @@
+fastapi==0.118.0
+uvicorn==0.38.0
+pydantic==2.12.5
+pydantic_core==2.41.5
+APScheduler==3.11.2
+python-dotenv==1.0.1
+itsdangerous==2.2.0
