@@ -141,6 +141,67 @@ body {
    grid-column: 2;
 }
 
+/* MAIN - LETTER PLACEHOLDER */
+
+#word {
+   position: relative;
+   display: flex;
+   flex-direction: row;
+   gap: 10px;
+}
+
+#word-pointer {
+   position: absolute;
+   bottom: -24px;
+   left: calc(30px - 8px);
+   width: 16px;
+   height: 16px;
+}
+
+.word-pointer-polyline {
+   fill: var(--fg);
+   stroke: var(--fg);
+   stroke-width: 2;
+}
+
+.placeholder {
+   width: 60px;
+   height: 60px;
+   border: 2px solid var(--err);
+   background-color: var(--err);
+   caret-color: var(--fg);
+   color: var(--fg);
+   font-size: 28px;
+   text-align: center;
+   outline: none;
+   cursor: default;
+   transition: border-color, background-color 0.1s;
+}
+
+.placeholder.ready {
+   background-color: var(--panel);
+   border-color: var(--line-strong);
+   transition: border-color, background-color 1s;
+}
+
+.placeholder::placeholder {
+   color: var(--line-strong);
+}
+
+.placeholder.active::placeholder {
+   color: var(--line-strong);
+}
+
+.placeholder.correct {
+   background-color: var(--ok);
+   color: var(--bg);
+}
+
+.placeholder.active {
+   border-color: var(--fg);
+   color: var(--fg);
+}
+
 /* FOOTER */
 
 #footer {
@@ -154,7 +215,6 @@ body {
 
 #lights {
    position: relative;
-   width: 180px;
 }
 
 #lights-title {
@@ -182,6 +242,18 @@ body {
    border-radius: 70px;
    border: 4px solid var(--line-strong);
    transition: background-color 0.1s;
+}
+
+#lights-message-display {
+   position: absolute;
+   top: 15px;
+   right: 15px;
+   width: 100px;
+   height: 25px;
+   display: flex;
+   justify-content: right;
+   align-items: center;
+   gap: 5px;
 }
 
 #lights-morse.on {
@@ -229,20 +301,6 @@ body {
    margin-top: 10px;
 }
 
-#translation-cover {
-   position: absolute;
-   display: flex;
-   width: inherit;
-   height: inherit;
-   background-color: var(--background);
-   opacity: 0.6;
-   z-index: 1;
-}
-
-#translation-cover.hidden {
-   display: none;
-}
-
 .translation-block {
    width: calc(50% - 10px);
    display: flex;
@@ -256,9 +314,8 @@ body {
    margin-left: 5px;
 }
 
-.translation-block.hint {
-   border-color: var(--green);
-   z-index: 2;
+.translation-block.hide {
+   filter: brightness(20%);
 }
 
 .translation-block .letter {
@@ -350,51 +407,6 @@ body {
    height: 120px;
    color: var(--grey);
    font-size: 40px;
-}
-
-/* LETTER PLACEHOLDER */
-.word {
-   display: flex;
-   flex-direction: row;
-   gap: 10px;
-}
-
-.placeholder {
-   width: 60px;
-   height: 60px;
-   border: 2px solid var(--err);
-   background-color: var(--err);
-   caret-color: var(--fg);
-   color: var(--fg);
-   font-size: 28px;
-   text-align: center;
-   outline: none;
-   cursor: default;
-   transition: border-color, background-color 0.1s;
-}
-
-.placeholder.ready {
-   background-color: var(--panel);
-   border-color: var(--line-strong);
-   transition: border-color, background-color 1s;
-}
-
-.placeholder::placeholder {
-   color: var(--line-strong);
-}
-
-.placeholder.active::placeholder {
-   color: var(--line-strong);
-}
-
-.placeholder.correct {
-   background-color: var(--ok);
-   color: var(--bg);
-}
-
-.placeholder.active {
-   border-color: var(--fg);
-   color: var(--fg);
 }
 
 #window-background {
