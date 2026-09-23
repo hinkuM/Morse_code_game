@@ -1,11 +1,10 @@
 import {
-   role, sentence, verifyGuess, senderGuess,
-   startTime, errors, isReady, gameStarted, finish, progress, restart
+   role, sentence, verifyGuess, senderGuess, skips,
+   startTime, errors, isReady, finish, progress, restart
 } from "./api.js"
 
-const headerTimer = document.getElementById("header-timer")
-const footer = document.querySelector("footer")
-const MAX_TIME = 5 * 60 * 1000
+const terminalContainer = document.getElementById("content")
+
 const TIME_PER_LETTER_SECONDS = 12
 const MORSE_TRANSLATION = [
    { letter: "A", morse: "•᠆" },
@@ -45,11 +44,28 @@ const TIMINGS = Object.freeze({
    DASH: 750,
    PAUSE: 200,
 })
+const USER_ROLE = await role()
 
-const USER_ROLE = ROLES.SENDER // ROLES.RECEIVER // await role()
+const READY_TIMER = 1000 * 10
+const TIME_BEFORE_SKIP_TUTORIAL = 10 // 3000
+const BASIC_TYPING_SPEED = 0 //18
+const MULTI_TYPING_SPEED = 1 //20
+
+
+const CURRENT_STAGE = await skips(0)
+if (CURRENT_STAGE === 1) {
+   terminalContainer.classList.add("ready-tutorial")
+} else if (CURRENT_STAGE === 2) {
+   terminalContainer.classList.add("end-tutorial")
+} else if (CURRENT_STAGE === 3) {
+   terminalContainer.classList.add("start-game")
+}
+console.log(CURRENT_STAGE);
+
+const currentLetterIndex = { ready: true, letter: 0, word: 0 }
 let MAX_LENGTH
-let isPlayerReadyInterval
-const currentLetterIndex = { ready: true, letter: 0 }
+let AMOUNT_OF_WORDS
+
 let timeCheckerInterval
 let progressTracker
 let teamName
@@ -144,7 +160,7 @@ function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
                   pointer.style.left = `${30 + currentLetterIndex.letter * (60 + 10) - 8}px`
                }, 1000)
             }
-            if (document.getElementById("word")) {
+            if (document.getElementById("word") && currentLetterIndex.letter < MAX_LENGTH) {
                document.querySelectorAll(".placeholder")[currentLetterIndex.letter].focus()
             }
          } else {
@@ -171,14 +187,6 @@ function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
 async function restartGame() {
    await restart()
    window.location.reload()
-}
-
-async function waitForReceiverEnd() {
-   document.getElementById("input-bar").remove()
-   const waitingContainer = document.createElement("section")
-   waitingContainer.setAttribute("id", "waiting")
-   waitingContainer.innerText = "Oczekiwanie, aż drugi gracz odszyfruje hasło..."
-   footer.append(waitingContainer)
 }
 
 async function endGame() {
@@ -215,49 +223,123 @@ function endTutorial() {
          txt: "Zatwierdź, aby przejść dalej"
       })
    terminalContainer.append(container)
-   document.getElementById("progress-numbers").innerText = "1 / 1"
    terminalContainer.classList.add("end-tutorial")
+   if (CURRENT_STAGE < 2) skips(2);
 }
 
-async function Sender(tutorial) {
-   const word = tutorial.text ?? await sentence()
-   MAX_LENGTH = word.length
+function finishWord(cb) {
+   clearInterval(barInterval)
    const main = document.getElementById("main")
+   const word = document.getElementById("word")
+   word.style.opacity = 0
+   const correctMark = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+   const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline")
+   correctMark.setAttribute("id", "main-mark")
+   correctMark.setAttribute("viewBox", "0 0 12 12")
+   polyline.setAttribute("points", "1,6 3,11 5,11 11,1 9,1 4,8 2,6 1,6")
+   polyline.classList.add("main-mar-polyline")
+   correctMark.append(polyline)
+   correctMark.style.width = 0
+   correctMark.style.height = 0
+   setTimeout(() => {
+      main.innerText = ""
+      main.append(correctMark)
+      document.getElementById("progress-numbers").innerText = "1 / 1"
+      correctMark.style.width = `${128}px`
+      correctMark.style.height = `${128}px`
+      setTimeout(() => {
+         cb()
+      }, 1000)
+   }, 1250)
+}
 
-   main.append(LetterPlaceholder({
-      role: ROLES.SENDER,
-      word,
-      tutorial
-   }))
+class Game {
+   constructor() {
+      this.timeouts = []
+   }
 
-   let time
-   let transmitting = false
-   const lightProbe = document.getElementById("lights-morse")
-   window.addEventListener("keydown", (e) => {
+   async start() {
+      this.words = (await sentence()).split(" ")
+      AMOUNT_OF_WORDS = this.words.length
+      this.serverTime = await startTime()
+      console.log(Date.now() - this.serverTime, this.serverTime);
+
+      this.countdown()
+      setTimeout(async () => {
+         await this.round()
+         if (USER_ROLE === ROLES.SENDER) {
+            this.senderEvents()
+         }
+
+      }, READY_TIMER + 3000)
+
+
+      // progressTracker = setInterval(async () => {
+      //    if (currentLetterIndex.word >= AMOUNT_OF_WORDS) return clearInterval(progressTracker)
+      //    const data = await progress()
+      //    const previousWordsLength =
+      //       this.words.slice(0, -1 * currentLetterIndex.word).map((el) => el.length).reduce((a, b) => a + b)
+      //    // moves pointer on sender
+      //    if (USER_ROLE === ROLES.SENDER) {
+      //       const pointer = document.getElementById("word-pointer")
+      //       pointer.style.left = `${30 + (data.progress - previousWordsLength) * (60 + 10) - 8}px`
+      //    }
+
+      //    // displays letters with light on receiver
+      //    if (USER_ROLE === ROLES.RECEIVER && data.progress < previousWordsLength + currentLetterIndex.letter) {
+      //       const letter = this.words[currentLetterIndex.word][currentLetterIndex.letter]
+      //       this.playMessage(letter, this.lastLetter !== letter)
+      //       this.lastLetter = letter
+      //    }
+      // }, 1000)
+
+      // const overheatIcons = document.querySelectorAll(".scoring-server")
+      // errorTracker = setInterval(async () => {
+      //    const mistakes = await errors()
+      //    for (let i = 0; i < mistakes; i++) {
+      //       overheatIcons[i].classList.remove("hidden")
+      //    }
+      //    if (mistakes > 2) {
+      //       clearInterval(errorTracker)
+      //    }
+      // }, 1000)
+   }
+
+   async round() {
+      await this.mainBuilder()
+   }
+
+   handleKeyDown(e) {
+      if (document.querySelectorAll(".placeholder").length <= 0) return
       const inputBar = document.getElementById("lights-message-display")
       if (!inputBar) return
       const inputLength = inputBar.children.length
       if (inputLength > 4 && e.code !== "Backspace") return
-      if (!transmitting && e.code === "Space") {
-         transmitting = true
-         time = Date.now()
+      const lightProbe = document.getElementById("lights-morse")
+      if (!this.transmitting && e.code === "Space") {
+         this.transmitting = true
+         this.time = Date.now()
          lightProbe.classList.add("on")
       }
-   })
-   window.addEventListener("keyup", (e) => {
+   }
+
+   handleKeyUp(e) {
+      if (document.querySelectorAll(".placeholder").length <= 0) return
       const inputBar = document.getElementById("lights-message-display")
       if (!inputBar) return
       const inputLength = inputBar.children.length
       if (inputLength > 4 && e.code !== "Backspace") return
-      transmitting = false
+      const lightProbe = document.getElementById("lights-morse")
+      this.transmitting = false
       if (e.code === "Backspace") {
-         inputBar.children[inputLength - 1].remove()
          if (inputLength - 1 <= 0) {
             for (const node of document.getElementById("translation-list").children) {
                node.classList.remove("hide")
             }
+            inputBar.children[0].remove()
             return
          }
+         inputBar.children[inputLength - 1].remove()
       }
 
       let morseForSearch = ""
@@ -271,7 +353,7 @@ async function Sender(tutorial) {
 
       if (e.code === "Space") {
          lightProbe.classList.remove("on")
-         if (Date.now() - time > TIMINGS.DOT) {
+         if (Date.now() - this.time > TIMINGS.DOT) {
             const dash = document.createElement("div")
             dash.classList.add("morse-dash")
             inputBar.append(dash)
@@ -302,48 +384,30 @@ async function Sender(tutorial) {
       for (const id of allMatches) {
          document.getElementById(id.letter).classList.remove("hide")
       }
-   })
-}
-
-async function Receiver(tutorial) {
-   const word = tutorial.text ?? await sentence()
-   MAX_LENGTH = word.length
-   const main = document.getElementById("main")
-
-   main.append(LetterPlaceholder({
-      role: ROLES.RECEIVER,
-      word,
-      tutorial
-   }))
-   document.querySelectorAll(".placeholder")[0].focus()
-}
-
-async function onLetterInput(role, letter, word, tutorial = undefined) {
-   if (currentLetterIndex.letter > MAX_LENGTH) return
-   if (role === ROLES.SENDER) {
-      const isCorrect = letter.toUpperCase() === word[currentLetterIndex.letter].toUpperCase()
-      if (!tutorial) senderGuess(isCorrect)
-      if (!isCorrect) return false
-   }
-   if (role === ROLES.RECEIVER) {
-      currentLetterIndex.ready = false
-      const result = tutorial ? tutorial.text[currentLetterIndex.letter].toUpperCase() === letter.toUpperCase() :
-         await verifyGuess(letter, currentLetterIndex.letter)
-      currentLetterIndex.ready = true
-      if (!result) return false
    }
 
-   currentLetterIndex.letter += 1
-   if (currentLetterIndex.letter === MAX_LENGTH) {
-      if (role === ROLES.SENDER) tutorial ? endTutorial() : waitForReceiverEnd()
-      if (role === ROLES.RECEIVER) tutorial ? endTutorial() : endGame()
+   senderEvents() {
+      this.time = null
+      this.transmitting = false
+      window.removeEventListener("keydown", this.handleKeyDown)
+      window.addEventListener("keydown", this.handleKeyDown)
+      window.removeEventListener("keyup", this.handleKeyDown)
+      window.addEventListener("keyup", this.handleKeyDown)
    }
-   return true
-}
 
-class Game {
-   constructor() {
-      this.timeouts = []
+   async mainBuilder(tutorial) {
+      const word = tutorial.text ?? this.words[currentLetterIndex.word]
+      MAX_LENGTH = word.length
+
+      document.getElementById("main").append(LetterPlaceholder({
+         role: USER_ROLE,
+         word,
+         tutorial
+      }))
+      this.timer(word)
+      if (USER_ROLE === ROLES.RECEIVER) {
+         document.querySelectorAll(".placeholder")[0].focus()
+      }
    }
 
    async layout() {
@@ -527,48 +591,22 @@ class Game {
       return container
    }
 
-   async tutorial() {
+   async playTutorial() {
       const word = "ukenium".toUpperCase()
-      this.timer(word)
+      AMOUNT_OF_WORDS = 1
+      await this.mainBuilder({ text: word })
       if (USER_ROLE === ROLES.RECEIVER) {
-         await Receiver({ text: word })
          setTimeout(() => {
             progressTracker = setInterval(async () => {
-               const guessed = document.querySelectorAll(".placeholder.correct").length
-               if (guessed >= word.length) clearInterval(progressTracker)
-               this.playMessage(word[guessed], this.lastLetter !== word[guessed])
-               this.lastLetter = word[guessed]
+               if (currentLetterIndex.letter >= word.length) return clearInterval(progressTracker)
+               const letter = word[currentLetterIndex.letter]
+               this.playMessage(letter, this.lastLetter !== letter)
+               this.lastLetter = letter
             }, 100)
          }, 5000)
-      } else if (USER_ROLE === ROLES.SENDER) {
-         await Sender({ text: word })
       }
-   }
-
-   async init() {
       if (USER_ROLE === ROLES.SENDER) {
-         const container = document.createElement("dialog")
-         const title = document.createElement("div")
-         const name = document.createElement("input")
-         const send = document.createElement("button")
-
-         container.setAttribute("id", "round-team")
-
-         title.setAttribute("id", "round-title")
-         title.innerText = "Wpisz nazwę drużyny"
-         send.innerText = "Zatwierdź"
-
-         send.addEventListener("click", () => {
-            teamName = name.value
-            container.remove()
-            this.readyDialog()
-         })
-
-         container.append(title, name, send)
-         document.body.append(container)
-         container.showModal()
-      } else {
-         this.readyDialog()
+         this.senderEvents()
       }
    }
 
@@ -617,44 +655,32 @@ class Game {
       this.timeouts.push(endTimeout)
    }
 
-   readyDialog() {
-      const container = document.createElement("dialog")
-      const title = document.createElement("div")
-
-      container.setAttribute("id", "round")
-
-      title.setAttribute("id", "round-title")
-      title.innerText = "Naciśnij Enter, gdy będziesz gotowy"
-
-      container.append(title)
-      document.body.append(container)
-      container.showModal()
-   }
-
    countdown() {
-      const endTime = Date.now() + 5000
+      const endTime = this.serverTime + READY_TIMER
       const timer = setInterval(async () => {
          const time = endTime - Date.now()
          if (time <= 0) {
             clearInterval(timer)
-            document.getElementById("round").remove()
-            return await this.start()
+            setTimeout(() => {
+               document.getElementById("loading-screen").classList.add("hidden")
+               setTimeout(() => {
+                  document.getElementById("loading-screen").remove()
+               }, 1000)
+            }, 1000)
+            return document.getElementById("window-background").remove()
          }
          const seconds = Math.floor(time / 1000) % 60
-         document.getElementById("round-title").innerText = "Gra rozpocznie się za: " + seconds + "s"
+         document.getElementById("window").children[0].innerText = "Odliczanie do rozpoczęcia"
+         document.getElementById("window").children[1].innerText = seconds
       }, 200)
    }
 
    timer(word) {
       const time = 1000 * TIME_PER_LETTER_SECONDS * word.length
+      if (Date.now() - this.serverTime > 0) { }
       const bar = document.getElementById("header-timer-bar")
       bar.style.transition = "none"
       bar.style.width = "100%"
-      bar.style.backgroundImage = `repeating-linear-gradient(45deg,
-            rgb(0, 229, 0) 0,
-            rgba(0, 255, 0, 0.35) 8px,
-            #d4000000 8px,
-            transparent 16px)`
 
       const onePercentage = time / 100
       let currentWidth = 100
@@ -663,69 +689,34 @@ class Game {
          bar.style.transition = "width 0.3s ease"
          barInterval = setInterval(() => {
             currentWidth -= 1
+            console.log(currentWidth);
             bar.style.width = currentWidth + "%"
-            if (currentWidth === 60) {
+            if (currentWidth > 60) {
+               bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+            rgb(0, 229, 0) 0,
+            rgba(0, 255, 0, 0.35) 8px,
+            #d4000000 8px,
+            transparent 16px)`
+            }
+            else if (currentWidth <= 60 && currentWidth > 20) {
                bar.style.backgroundImage = `repeating-linear-gradient(45deg,
             rgb(229, 187, 0) 0,
             rgba(255, 238, 0, 0.35) 8px,
             #d4000000 8px,
             transparent 16px)`
             }
-            if (currentWidth === 20) {
+            else if (currentWidth <= 20) {
                bar.style.backgroundImage = `repeating-linear-gradient(45deg,
-            rgb(229, 0, 0) 0,
-            rgba(255, 0, 0, 0.35) 8px,
-            #d4000000 8px,
-            transparent 16px)`
+               rgb(229, 0, 0) 0,
+               rgba(255, 0, 0, 0.35) 8px,
+               #d4000000 8px,
+               transparent 16px)`
             }
-            if (currentWidth === 0) {
+            if (currentWidth <= 0) {
                clearInterval(barInterval)
             }
          }, onePercentage)
       }, 300)
-   }
-
-   async start() {
-      if (USER_ROLE === ROLES.SENDER) {
-         await Sender()
-      } else if (USER_ROLE === ROLES.RECEIVER) {
-         await Receiver()
-         document.querySelector(".active").focus()
-      }
-      const serverTime = new Date(await startTime())
-      const timeDifference = new Date().getHours() - serverTime.getHours()
-      const startDate = timeDifference != 0 ? serverTime.getTime() + timeDifference * 60 * 60 * 1000 : serverTime.getTime()
-      timeCheckerInterval = setInterval(() => {
-         const time = Date.now() - startDate - 5000
-         const seconds = Math.floor(time / 1000) % 60
-         const minutes = Math.floor(Math.floor(time / 1000) / 60)
-         headerTimer.innerText = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds)
-         if (time > MAX_TIME) {
-            document.getElementById("scoring-time").classList.add("lose")
-         }
-      }, 100)
-      const allPlaceholders = document.querySelectorAll(".placeholder")
-      progressTracker = setInterval(async () => {
-         const data = await progress()
-         for (let i = 0; i < data.progress; i++) {
-            const child = allPlaceholders[i];
-            child.classList.add("ready")
-         }
-         if (data.progress > 0 && USER_ROLE === ROLES.RECEIVER) {
-            this.currentLetter = data.current_letter
-         }
-         if (USER_ROLE === ROLES.SENDER && data.progress === MAX_LENGTH) {
-            await endGame()
-         }
-      }, 1000)
-
-      errorTracker = setInterval(async () => {
-         if (await errors() > 0) {
-            document.getElementById("scoring-error").classList.add("lose")
-            clearInterval(errorTracker)
-         }
-      }, 3000)
-
    }
 
    createTranslation(table) {
@@ -753,12 +744,7 @@ class Game {
          table.append(container)
       }
    }
-
-   playCurrentLetter() {
-      console.log(MORSE_TRANSLATION_MAP.get(this.currentLetter.toUpperCase()));
-   }
 }
-const waitBeforeSkip = 3000
 class tutorialText {
    clearTimeouts() {
       for (const timeout of this.timeouts) {
@@ -787,7 +773,7 @@ class tutorialText {
       terminalContainer.classList.add("start-tutorial")
    }
    signal() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("start-tutorial")
       }
       this.lastSkip = Date.now()
@@ -852,7 +838,7 @@ class tutorialText {
       this.timeouts.push(a)
    }
    signalTwo() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("signal-tutorial")
       }
       this.lastSkip = Date.now()
@@ -889,7 +875,7 @@ class tutorialText {
       terminalContainer.classList.add("signal-two-tutorial")
    }
    mainArea() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("signal-two-tutorial")
       }
       this.lastSkip = Date.now()
@@ -957,7 +943,7 @@ class tutorialText {
       }
    }
    mainAreaTwo() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("main-tutorial")
       }
       this.lastSkip = Date.now()
@@ -978,7 +964,7 @@ class tutorialText {
       terminalContainer.classList.add("main-two-tutorial")
    }
    mainAreaThree() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("main-two-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1000,7 +986,7 @@ class tutorialText {
       const pointer = document.getElementById("word-pointer")
       for (let i = 0; i < this.word.length; i++) {
          const a = setTimeout(() => {
-            pointer.style.left = `${30 + i * (60 + 10) - 8}px`
+            pointer.style.left = `${30 + i * (60 + 10) - 8} px`
          }, i * 1000)
          this.timeouts.push(a)
       }
@@ -1008,7 +994,7 @@ class tutorialText {
          this.timeouts = []
          for (let i = 0; i < this.word.length; i++) {
             const a = setTimeout(() => {
-               pointer.style.left = `${30 + i * (60 + 10) - 8}px`
+               pointer.style.left = `${30 + i * (60 + 10) - 8} px`
             }, i * 1000)
             this.timeouts.push(a)
          }
@@ -1018,7 +1004,7 @@ class tutorialText {
       terminalContainer.classList.add("main-three-tutorial")
    }
    translation() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("main-two-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1040,7 +1026,7 @@ class tutorialText {
       terminalContainer.classList.add("translation-tutorial")
    }
    overheat() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("translation-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1069,7 +1055,7 @@ class tutorialText {
       }
    }
    overheatTwo() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("overheat-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1089,7 +1075,7 @@ class tutorialText {
       terminalContainer.classList.add("overheat-two-tutorial")
    }
    progress() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("overheat-two-tutorial")
       }
       clearInterval(this.overheatInter)
@@ -1117,7 +1103,7 @@ class tutorialText {
       terminalContainer.classList.add("progress-tutorial")
    }
    timeLimit() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("progress-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1135,7 +1121,7 @@ class tutorialText {
       terminalContainer.classList.add("time-tutorial")
    }
    timeLimitTwo() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("time-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1155,7 +1141,7 @@ class tutorialText {
       terminalContainer.classList.add("time-two-tutorial")
    }
    end() {
-      if (Date.now() - this.lastSkip < waitBeforeSkip) {
+      if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
          return terminalContainer.classList.add("time-two-tutorial")
       }
       this.lastSkip = Date.now()
@@ -1178,47 +1164,75 @@ class tutorialText {
 
 const gameControls = new Game()
 
+async function onLetterInput(role, letter, word, tutorial = undefined) {
+   if (currentLetterIndex.letter > MAX_LENGTH) return
+   if (role === ROLES.SENDER) {
+      const isCorrect = letter.toUpperCase() === word[currentLetterIndex.letter].toUpperCase()
+      if (!tutorial) senderGuess(isCorrect)
+      if (!isCorrect) return false
+   }
+   if (role === ROLES.RECEIVER) {
+      currentLetterIndex.ready = false
+      const result = tutorial ? tutorial.text[currentLetterIndex.letter].toUpperCase() === letter.toUpperCase() :
+         await verifyGuess(letter, currentLetterIndex.letter)
+      currentLetterIndex.ready = true
+      if (!result) return false
+   }
+
+   currentLetterIndex.letter += 1
+   if (currentLetterIndex.letter === MAX_LENGTH) {
+      currentLetterIndex.letter = 0
+      currentLetterIndex.word += 1
+      if (currentLetterIndex.word !== AMOUNT_OF_WORDS) finishWord(gameControls.round())
+   }
+   if (currentLetterIndex.word === AMOUNT_OF_WORDS) {
+      if (role === ROLES.SENDER) tutorial ? finishWord(endTutorial) : finishWord()
+      if (role === ROLES.RECEIVER) tutorial ? finishWord(endTutorial) : finishWord(endGame)
+   }
+
+   return true
+}
 
 const entryTextReceiver =
-   `OMNICORP INDUSTRIES (TM) TERMLINK PROTOCOL
+   `OMNICORP INDUSTRIES(TM) TERMLINK PROTOCOL
 ŁADOWANIE DZIENNIKA ZDARZEŃ...
 
->SET LOG/READ=INCYDENT_MGLAWICA.LOG
+> SET LOG / READ=INCYDENT_MGLAWICA.LOG
 
-[T-14:32:07] KURS: PRZELOT PRZEZ MGŁAWICĘ, SEKTOR 7-G
-[T-14:32:41] WYKRYTO ANOMALIĘ
-[T-14:32:58] GŁÓWNY MODUŁ TRANSMISYJNY..............USZKODZONY
-[T-14:33:02] POMOCNICZY MODUŁ TRANSMISYJNY..........AKTYWNY
-[T-14:33:15] POZOSTAŁE SYSTEMY STATKU...............SPRAWNE
+[T-14:32:07]KURS: PRZELOT PRZEZ MGŁAWICĘ, SEKTOR 7-G
+[T-14:32:41]WYKRYTO ANOMALIĘ
+[T-14:32:58]GŁÓWNY MODUŁ TRANSMISYJNY..............USZKODZONY
+[T-14:33:02]POMOCNICZY MODUŁ TRANSMISYJNY..........AKTYWNY
+[T-14:33:15]POZOSTAŁE SYSTEMY STATKU...............SPRAWNE
 
 STATUS OGÓLNY: STATEK ZDOLNY DO DALSZEGO LOTU
-STATUS ŁĄCZNOŚCI: OGRANICZONA (KANAŁ POMOCNICZY)
+STATUS ŁĄCZNOŚCI: OGRANICZONA(KANAŁ POMOCNICZY)
 
 POTWIERDŹ UŻYWAJĄC "ENTER", ABY PRZEJŚĆ DALEJ
 `
 
 const entryTextSender =
-   `OMNICORP INDUSTRIES (TM) TERMLINK PROTOCOL
+   `OMNICORP INDUSTRIES(TM) TERMLINK PROTOCOL
 ŁADOWANIE DZIENNIKA ZDARZEŃ...
 
->SET LOG/READ=ODBIÓR_MGLAWICA.LOG
+> SET LOG / READ=ODBIÓR_MGLAWICA.LOG
 
-[T-14:33:20] ODEBRANO SYGNAŁ AWARYJNY
-[T-14:33:24] ŹRÓDŁO: JEDNOSTKA W SEKTORZE 7-G
-[T-14:33:40] STAN ZAŁOGI..............................STABILNY
-[T-14:33:31] GŁÓWNY KANAŁ ŁĄCZNOŚCI ZE STATKIEM.......ZNISZCZONY
-[T-14:33:35] WYKRTYO KANAŁ POMOCNICZY
+[T-14:33:20]ODEBRANO SYGNAŁ AWARYJNY
+[T-14:33:24]ŹRÓDŁO: JEDNOSTKA W SEKTORZE 7-G
+[T-14:33:40]STAN ZAŁOGI..............................STABILNY
+[T-14:33:31]GŁÓWNY KANAŁ ŁĄCZNOŚCI ZE STATKIEM.......ZNISZCZONY
+[T-14:33:35]WYKRTYO KANAŁ POMOCNICZY
 
 STAN MISJI: STATEK WRACA NA ZIEMIE
-STATUS ŁĄCZNOŚCI: OGRANICZONA (WYŁĄCZNIE KANAŁ POMOCNICZY)
+STATUS ŁĄCZNOŚCI: OGRANICZONA(WYŁĄCZNIE KANAŁ POMOCNICZY)
 
 POTWIERDŹ UŻYWAJĄC "ENTER", ABY PRZEJŚĆ DALEJ
 `
 
 const tutorialLoadingTextReceiver =
-   `[T-15:04:22] ZEBRANO PRÓBKI MINERALNE Z REGIONU MGŁAWICY
-[T-15:04:23] KLASYFIKACJA MATERIAŁU..................NIEZNANA
-[T-15:04:24] BAZA DANYCH POKŁADOWA...................BRAK WYNIKU
+   `[T-15:04:22]ZEBRANO PRÓBKI MINERALNE Z REGIONU MGŁAWICY
+[T-15:04:23]KLASYFIKACJA MATERIAŁU..................NIEZNANA
+[T-15:04:24]BAZA DANYCH POKŁADOWA...................BRAK WYNIKU
 
 UWAGA: PRÓBKI NIESTABILNE
 DO STABILIZACJI WYMAGANA JEST NAZWA MATERIAŁU
@@ -1226,23 +1240,24 @@ NAZWĘ MUSI PRZESŁAĆ BAZA NA ZIEMI
 
 GŁÓWNY MODUŁ USZKODZONY - TRANSMISJA GŁOSOWA NIEDOSTĘPNA
 JEDYNY AKTYWNY KANAŁ: TRANSMISJA KODEM MORSE'A (MODUŁ POMOCNICZY)
-   
-[T-15:04:25] SPRAWDZANIE UPRAWNIEŃ UŻYTKOWNIKA.............OK
-[T-15:04:26] ANALIZA PRZESZKOLENIA UŻYTKOWNIKA.............BŁĄD
+
+[T-15:04:25]SPRAWDZANIE UPRAWNIEŃ UŻYTKOWNIKA.............OK
+[T-15:04:26]ANALIZA PRZESZKOLENIA UŻYTKOWNIKA.............BŁĄD
 
 WYSTĄPIŁ BŁĄÐ PODCZAS ANALIZY UMIEJĘTNOŚCI
 ZE WZGLĘDU NA BRAK INFORMACJI UŻYTKOWNIK MUSI PRZEJŚĆ SZKOLENIE
 
->USE FILES/READ=SZKOLENIE.EXE
+> USE FILES / READ=SZKOLENIE.EXE
 
-[T-15:04:30] ŁADOWANIE PROGRAMU SZKOLENIE.EXE.............OK
-[T-15:04:32] WGRYWANIE PROGRAMU DO PAMIĘCI................OK
+[T-15:04:30]ŁADOWANIE PROGRAMU SZKOLENIE.EXE.............OK
+[T-15:04:32]WGRYWANIE PROGRAMU DO PAMIĘCI................OK
 
 POTWIERDŹ UŻYWAJĄC "ENTER", ABY ROZPOCZĄĆ SZKOLENIE
 `
+
 const tutorialLoadingTextSender =
-   `[T-15:05:01] ODEBRANO ŻĄDANIE IDENTYFIKACJI PRÓBKI
-[T-15:05:02] PRZESZUKIWANIE BAZY DANYCH.................WYNIK ZNALEZIONY
+   `[T-15:05:01]ODEBRANO ŻĄDANIE IDENTYFIKACJI PRÓBKI
+[T-15:05:02]PRZESZUKIWANIE BAZY DANYCH.................WYNIK ZNALEZIONY
 
 UWAGA: PRÓBKI STATKU NIESTABILNE
 STACJA NAZIEMNA MUSI PRZESŁAĆ NAZWĘ MATERIAŁU
@@ -1250,40 +1265,48 @@ STACJA NAZIEMNA MUSI PRZESŁAĆ NAZWĘ MATERIAŁU
 GŁÓWNY MODUŁ STATKU USZKODZONY - TRANSMISJA GŁOSOWA NIEDOSTĘPNA
 JEDYNY AKTYWNY KANAŁ: NADAJNIK KODU MORSE'A
 
-[T-15:05:08] SPRAWDZANIE UPRAWNIEŃ OPERATORA..............OK
-[T-15:05:09] ANALIZA PRZESZKOLENIA OPERATORA..............BŁĄD
+[T-15:05:08]SPRAWDZANIE UPRAWNIEŃ OPERATORA..............OK
+[T-15:05:09]ANALIZA PRZESZKOLENIA OPERATORA..............BŁĄD
 
 WYSTĄPIŁ BŁĄD PODCZAS ANALIZY UMIEJĘTNOŚCI
 ZE WZGLĘDU NA BRAK INFORMACJI OPERATOR MUSI PRZEJŚĆ SZKOLENIE
 
->USE FILES/READ=SZKOLENIE.EXE
+> USE FILES / READ=SZKOLENIE.EXE
 
-[T-15:05:12] ŁADOWANIE PROGRAMU SZKOLENIE.EXE.............OK
-[T-15:05:14] WGRYWANIE PROGRAMU DO PAMIĘCI................OK
+[T-15:05:12]ŁADOWANIE PROGRAMU SZKOLENIE.EXE.............OK
+[T-15:05:14]WGRYWANIE PROGRAMU DO PAMIĘCI................OK
 
 POTWIERDŹ UŻYWAJĄC "ENTER", ABY ROZPOCZĄĆ SZKOLENIE
 `
 
-const terminalContainer = document.getElementById("content")
+const waiting =
+   `[T-15:10:41]SZKOLENIE ZAKOŃCZONE POWODZENIEM
+[T-15:10:41]DIAGNOSTYKA URZĄDZEŃ NADAJĄCYCH..........SPRAWNE
+[T-15:10:46]KALIBRACJA URZĄDZEŃ NADAJĄCYCH...........GOTOWE
+[T-15:10:41]OCZEKIWANIE NA POŁĄCZNIENIE..............GOTOWE
+
+POTWIERDŹ UŻYWAJĄC "ENTER", ABY ROZPOCZĄĆ MISJE
+`
+
 const cursor = document.createElement("span");
 cursor.className = "cursor";
 let typeTimer = null;
 
-function startTyping(text, checkpointClass, timeout = 500, speed = 20) {
+function startTyping(text, checkpointClass, timeout = 500) {
    clearTimeout(typeTimer);
    terminalContainer.textContent = "";
    let i = 0;
    setTimeout(() => {
       (function type() {
-         terminalContainer.textContent = text.slice(0, i);
+         terminalContainer.textContent = text.slice(0, i)
          terminalContainer.append(cursor);
          if (i++ < text.length) {
-            typeTimer = setTimeout(type, 18 + Math.random() * speed)
+            typeTimer = setTimeout(type, BASIC_TYPING_SPEED + Math.random() * MULTI_TYPING_SPEED)
          } else {
             terminalContainer.classList.add(checkpointClass)
          }
       })();
-   }, timeout)
+   }, 500)
 
 }
 
@@ -1336,6 +1359,8 @@ function powerTerminal(onStart) {
       });
    }
 }
+
+
 const tutorialControler = new tutorialText()
 const allEvents = new Map([
    ["ready-lore", () => {
@@ -1344,18 +1369,13 @@ const allEvents = new Map([
    }],
    ["ready-tutorial", () => {
       terminalContainer.classList.remove("ready-tutorial")
-      powerTerminal()
+      if (CURRENT_STAGE === 0) { skips(1); powerTerminal(); }
 
       setTimeout(async () => {
          terminalContainer.innerText = ""
          powerTerminal()
          terminalContainer.append(await gameControls.layout())
          tutorialControler.init()
-         // if (await gameStarted()) {
-         //    await gameControls.start()
-         // } else {
-         //    await gameControls.init()
-         // }
       }, 2000)
    }],
    ["start-tutorial", () => {
@@ -1413,12 +1433,7 @@ const allEvents = new Map([
    ["finish-tutorial", async () => {
       terminalContainer.classList.remove("finish-tutorial")
       document.getElementById("window-background").remove()
-      await gameControls.tutorial()
-      // if (await gameStarted()) {
-      //    await gameControls.start()
-      // } else {
-      //    await gameControls.init()
-      // }
+      await gameControls.playTutorial()
       setTimeout(() => {
          document.getElementById("loading-screen").classList.add("hidden")
          setTimeout(() => {
@@ -1428,23 +1443,36 @@ const allEvents = new Map([
    }],
    ["end-tutorial", () => {
       terminalContainer.classList.remove("end-tutorial")
-      powerTerminal()
+      if (CURRENT_STAGE < 2) powerTerminal()
 
-      // setTimeout(async () => {
-      //    terminalContainer.innerText = ""
-      //    powerTerminal()
-      //    terminalContainer.append(await gameControls.layout())
-      //    await gameControls.tutorial()
-      //    // if (await gameStarted()) {
-      //    //    await gameControls.start()
-      //    // } else {
-      //    //    await gameControls.init()
-      //    // }
-      //    document.getElementById("loading-screen").classList.add("hidden")
-      //    setTimeout(() => {
-      //       document.getElementById("loading-screen").remove()
-      //    }, 1000)
-      // }, 2000)
+      setTimeout(() => {
+         terminalContainer.innerText = ""
+         powerTerminal()
+         startTyping(waiting, "start-game")
+      }, 2000)
+   }],
+   ["start-game", async () => {
+      terminalContainer.classList.remove("start-game")
+      if (CURRENT_STAGE < 3) { skips(3); powerTerminal() }
+      setTimeout(async () => {
+         terminalContainer.innerText = ""
+         terminalContainer.append(await gameControls.layout())
+         const container = popUp({
+            x: -1, y: -1,
+            width: 250,
+            height: 250,
+            titl: "Nawiązywanie połączenia",
+            txt: "..."
+         })
+         terminalContainer.append(container)
+         powerTerminal()
+         const checkIfReady = setInterval(async () => {
+            if (await isReady()) {
+               clearInterval(checkIfReady)
+               gameControls.start()
+            }
+         }, 500)
+      }, 2000)
    }],
 ])
 
@@ -1455,23 +1483,14 @@ window.addEventListener("keypress", (e) => {
          setTimeout(() => {
             document.getElementById("start").remove()
          }, 2000)
-         setTimeout(() => {
-            powerTerminal(() => { startTyping(USER_ROLE === ROLES.RECEIVER ? entryTextReceiver : entryTextSender, "ready-lore") })
-         }, 3000)
+         if (CURRENT_STAGE === 0) {
+            setTimeout(() => {
+               powerTerminal(() => { startTyping(USER_ROLE === ROLES.RECEIVER ? entryTextReceiver : entryTextSender, "ready-lore") })
+            }, 3000)
+         }
+
       }
       const action = allEvents.get(terminalContainer.classList[0])
       if (action) action()
-      if (document.getElementById("round-title") && !document.getElementById("round-team")) {
-         document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."
-         isPlayerReadyInterval = setInterval(async () => {
-            if (await isReady()) {
-               clearInterval(isPlayerReadyInterval)
-               gameControls.countdown()
-            } else {
-               document.getElementById("round-title").innerText = "Oczekiwanie na drugiego gracza..."
-            }
-         }, 500)
-      }
    }
-
 })

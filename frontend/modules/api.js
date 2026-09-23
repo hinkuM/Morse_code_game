@@ -117,19 +117,6 @@ export function isReady() {
    )
 }
 
-export function gameStarted() {
-   return apiRequester(
-      {
-         method: "POST",
-         url: "/room/started",
-         contentType: "application/json",
-         success: (response) => {
-            return response
-         },
-      }
-   )
-}
-
 export function finish(teamName) {
    return apiRequester(
       {
@@ -169,12 +156,13 @@ export function restart() {
       }
    )
 }
-
-export function test() {
+// 0, 1, 2
+export function skips(amount) {
    return apiRequester(
       {
          method: "POST",
-         url: "test",
+         url: "room/skips",
+         data: { amount },
          contentType: "application/json",
          success: (response) => {
             return response

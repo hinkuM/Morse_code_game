@@ -14,6 +14,7 @@ BASE_TIMEOUT_IN_SECONDS = 1
 MAX_TIMEOUT_ATTEMPTS = 5
 ROOMS_DB = "rooms"
 PLAYERS_DB = "players"
+PROGRESS_DB = "progress"
 RESULTS_DB= "results"
 FRONTEND = "../frontend"
 
@@ -21,7 +22,6 @@ FRONTEND = "../frontend"
 import os
 import uuid
 import sqlite3
-from apscheduler.schedulers.background import BackgroundScheduler
 import time
 from fastapi import FastAPI, HTTPException, Request, Depends
 from pydantic import BaseModel
@@ -66,15 +66,15 @@ def create_database_tables():
          CREATE TABLE IF NOT EXISTS {ROOMS_DB} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
-            last_join_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_join_time INTEGER NOT NULL DEFAULT {int(time.time() * 1000)},
             game_started INTEGER DEFAULT 0,
-            game_start_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            game_start_time INTEGER NOT NULL DEFAULT {int(time.time()* 1000)}
          )
       ''')
       cursor.execute(f'''
          CREATE TABLE IF NOT EXISTS {PLAYERS_DB} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            player_id TEXT NOT NULL,
+            player_id TEXT NOT NULL UNIQUE,
             room_id INTEGER NOT NULL,
             role TEXT NOT NULL,
             ready INTEGER NOT NULL DEFAULT 0,
@@ -82,6 +82,16 @@ def create_database_tables():
             incorrect_guesses INTEGER NOT NULL DEFAULT 0,
             sentence TEXT NOT NULL,
             FOREIGN KEY (room_id) REFERENCES {ROOMS_DB}(id)
+         )
+      ''')
+      cursor.execute(f'''
+         CREATE TABLE IF NOT EXISTS {PROGRESS_DB} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id TEXT NOT NULL UNIQUE,
+            tutorial_start INTEGER NOT NULL DEFAULT 0,
+            tutorial_end INTEGER NOT NULL DEFAULT 0,
+            game_start INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (player_id) REFERENCES {PLAYERS_DB}(player_id) ON DELETE CASCADE
          )
       ''')
       cursor.execute(f'''
@@ -109,37 +119,13 @@ def create_database_tables():
    finally:
       conn.close()
 
-def clean_rooms():
-    conn = sqlite3.connect('game.db')
-    try:
-        cursor = conn.cursor()
-        cursor.execute(f'''
-            DELETE FROM {PLAYERS_DB}
-            WHERE room_id IN (
-                SELECT id FROM {ROOMS_DB}
-                WHERE last_join_time < datetime('now', '-10 minutes')
-                  AND game_started = 0
-            )
-        ''')
-        cursor.execute(f'''
-            DELETE FROM {ROOMS_DB}
-            WHERE last_join_time < datetime('now', '-10 minutes')
-              AND game_started = 0
-        ''')
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
 def player_leave(user_session_id):
    conn = sqlite3.connect('game.db')
    try:
       cursor = conn.cursor()
       cursor.execute(f'''
          UPDATE {ROOMS_DB}
-         SET last_join_time = CURRENT_TIMESTAMP, game_started = 0
+         SET last_join_time = {int(time.time()* 1000)}, game_started = 0
          WHERE id IN (
             SELECT room_id FROM {PLAYERS_DB}
             WHERE player_id = ?
@@ -156,9 +142,6 @@ def player_leave(user_session_id):
    finally:
       conn.close()
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(clean_rooms, 'interval', minutes=5)
-scheduler.start()
 
 create_database_tables()
 
@@ -194,16 +177,6 @@ def ensure_session(request: Request):
       request.session["user_session_id"] = str(uuid.uuid4())
       players_attempts_tracker.setdefault(user_session_id, {"user_attempts": 0, "user_last_attempt": None})
    return request.session["user_session_id"]
-
-@app.get("/test")
-def test(request: Request):
-   return FileResponse(f"{FRONTEND}/views/room.html")
-
-@app.post("/test")
-def test(request: Request, conn: sqlite3.Connection = Depends(get_db_access)):
-   cursor = conn.cursor()
-   cursor.execute(f"SELECT * FROM {PLAYERS_DB}", ())
-   return {"code":"ok", "data": cursor.fetchall()}
 
 @app.get("/")
 def index(request: Request):
@@ -250,6 +223,14 @@ def index(conn: sqlite3.Connection = Depends(get_db_access)):
    cursor.execute(f"SELECT * FROM {PLAYERS_DB}")
    rows = cursor.fetchall()
    return { "code": "ok", "data": rows }
+
+@app.get("/progress")
+def index(conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(f"SELECT * FROM {PROGRESS_DB}")
+   rows = cursor.fetchall()
+   return { "code": "ok", "data": rows }
+
 
 @app.get("/results")
 def index(conn: sqlite3.Connection = Depends(get_db_access)):
@@ -324,16 +305,49 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
    return { "code": "REDIRECT", "data": redirect }
 
 
+class Amount_of_skips(BaseModel):
+   amount: int
 
+# WHERE TO START GAME FOR USER IF HE RE-JOINED
+@app.post("/room/skips", status_code=200)
+def send_sentence(body: Amount_of_skips, request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+    if body.amount < 0 or body.amount > 3:
+        raise HTTPException(status_code=400, detail="wrong amount of skips")
 
+    cursor = conn.cursor()
+
+    if body.amount == 0:
+        cursor.execute(
+            f"SELECT (tutorial_start + tutorial_end + game_start) as skips FROM {PROGRESS_DB} WHERE player_id = ?",
+            (user_session_id,)
+        )
+        row = cursor.fetchone()
+        if row is None:
+            cursor.execute(f"INSERT INTO {PROGRESS_DB} (player_id, tutorial_start, tutorial_end, game_start) VALUES (?, 0, 0, 0)", (user_session_id,))
+            return {"code": "ok", "data": 0}
+        return {"code": "ok", "data": row["skips"]}
+
+    if body.amount == 1:
+        cursor.execute(f"UPDATE {PROGRESS_DB} SET tutorial_start = 1 WHERE player_id = ?", (user_session_id,))
+    elif body.amount == 2:
+        cursor.execute(f"UPDATE {PROGRESS_DB} SET tutorial_start = 1, tutorial_end = 1 WHERE player_id = ?", (user_session_id,))
+    elif body.amount == 3:
+        cursor.execute(f"UPDATE {PROGRESS_DB} SET tutorial_start = 1, tutorial_end = 1, game_start = 1 WHERE player_id = ?", (user_session_id,))
+
+    conn.commit()
+    return {"code": "ok", "data": 0}
+
+# WHAT ROLE IS HE PLAYING
 @app.post("/room/role", status_code=200)
 def send_role(request: Request, user_session_id=Depends(check_session)):
    return { "code": "ok", "data": request.session["user_session_role"] }
 
+# SENDS WORDS/SENTENCE TO USER
 @app.post("/room/sentence", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session)):
    return { "code": "ok", "data": SENTENCES[request.session["user_session_room"]] }
 
+# CHECKS AND SENDS WHEN GAME STARTED
 @app.post("/room/time", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -344,6 +358,7 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
    start_time = cursor.fetchone()
    return { "code": "ok", "data": start_time["game_start_time"] }
 
+# SENDS HOW MANY MISTAKES USERS MADE
 @app.post("/room/errors", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -354,6 +369,7 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
    errors = cursor.fetchone()
    return { "code": "ok", "data": errors["errors"] }
 
+# SENDS HOW MANY LETTERS ANOTHER PLAYER GUESSED
 @app.post("/room/progress", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -362,17 +378,9 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
       (request.session["user_session_room"], user_session_id)
    )
    progress = cursor.fetchone()
-   cursor.execute(
-      f"SELECT correct_guesses FROM {PLAYERS_DB} WHERE room_id = (?) AND player_id = (?)",
-      (request.session["user_session_room"], user_session_id)
-   )
-   current_letter = cursor.fetchone()
-   print(len(SENTENCES_TRIMED[request.session["user_session_room"]]), current_letter["correct_guesses"])
-   if request.session["user_session_role"] == Role.sender:
-      return { "code": "ok", "data": {"progress": progress["correct_guesses"] }}
-   return { "code": "ok", "data": {"progress": progress["correct_guesses"], "current_letter": SENTENCES_TRIMED[request.session["user_session_room"]][current_letter["correct_guesses"]] } }
+   return { "code": "ok", "data": {"progress": progress["correct_guesses"] } }
 
-
+# CHECKS IF PLAYERS ARE BOTH READY TO PLAY
 @app.post("/room/ready", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -385,28 +393,23 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
       (request.session["user_session_room"], user_session_id)
    )
    isReady = cursor.fetchone()
-   if isReady["ready"] == 1:
+   cursor.execute(
+      f"SELECT game_started FROM {ROOMS_DB} WHERE id = (?)",
+      (request.session["user_session_room"],)
+   )
+   gameReady = cursor.fetchone()
+   if isReady["ready"] == 1 and gameReady["game_started"] != 1:
       cursor.execute(
-         f"UPDATE {ROOMS_DB} SET game_started = 1, game_start_time = CURRENT_TIMESTAMP WHERE id = (?)", 
+         f"UPDATE {ROOMS_DB} SET game_started = 1, game_start_time = {int(time.time()* 1000)} WHERE id = (?)", 
          (request.session["user_session_room"],)
          )
       
    return { "code": "ok", "data": True if isReady["ready"] == 1 else False }
 
-@app.post("/room/started", status_code=200)
-def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
-   cursor = conn.cursor()
-   cursor.execute(
-      f"SELECT game_started FROM {ROOMS_DB} WHERE id = (?)",
-      (request.session["user_session_room"],)
-   )
-   started = cursor.fetchone()
-      
-   return { "code": "ok", "data": True if started["game_started"] == 1 else False }
-
 class Team_name(BaseModel):
    teamName: str
 
+# CHECKS IF GAME WAS FINISHED AND SAVES RESULTS
 @app.post("/room/finish", status_code=200)
 def send_sentence(body: Team_name,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -429,11 +432,7 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
       (request.session["user_session_room"],)
    )
    game_start_time = cursor.fetchone()["game_start_time"]
-   dt = datetime.strptime(game_start_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-   milliseconds = int(dt.timestamp() * 1000)
-   print(no_errors, game_start_time, milliseconds, int(time.time() * 1000) + 1000 * 60 * 5)
-
-   in_time = True if milliseconds < int(time.time() * 1000) + 1000 * 60 * 5  else False
+   in_time = True if game_start_time < int(time.time() * 1000) + 1000 * 60 * 5  else False
    if len(body.teamName) > 0:
       cursor.execute(f"INSERT INTO {RESULTS_DB} (team_name, room_id, point_no_error, point_time, sentence, time) VALUES (?, ?, ?, ?, ?, ?)", 
          (body.teamName, request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, SENTENCES[request.session["user_session_room"]], int(time.time() * 1000) - milliseconds - 5000 )
@@ -444,6 +443,7 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
    )
    return { "code": "ok", "data": {"no_errors": no_errors, "in_time": in_time  } }
 
+# RESTARTS GAME DATA
 @app.post("/room/restart", status_code=200)
 def restart(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -452,7 +452,7 @@ def restart(request: Request, user_session_id=Depends(check_session), conn: sqli
    )
    cursor.execute(f'''
       UPDATE {ROOMS_DB}
-      SET last_join_time = CURRENT_TIMESTAMP, game_started = 0
+      SET last_join_time = {int(time.time()* 1000)}, game_started = 0
       WHERE id IN (
          SELECT room_id FROM {PLAYERS_DB}
          WHERE player_id = ?
@@ -469,6 +469,7 @@ class Guess(BaseModel):
    letter: str
    index: int
 
+# CHECKS IF LETTER IS CORRECT
 @app.post("/room/verify", status_code=200)
 def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    user_room = request.session["user_session_room"]
@@ -516,6 +517,7 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
 class Letter(BaseModel):
    correct: bool
 
+# UPDATES SENDER SCORE
 @app.post("/room/senderGuess", status_code=200)
 def set_incorrect_counter(body: Letter, request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
