@@ -66,6 +66,10 @@ const currentLetterIndex = { ready: true, letter: 0, word: 0 }
 let MAX_LENGTH
 let AMOUNT_OF_WORDS
 
+let timeHoldingSpace = null
+let isTransmitting = false
+let blockInput = false
+
 let timeCheckerInterval
 let progressTracker
 let teamName
@@ -117,24 +121,27 @@ function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
    for (let i = 0; i < word.length; i++) {
       const input = document.createElement("input")
       input.classList.add("placeholder", "ready")
-      if (i === 0) input.classList.add("active")
       input.placeholder = role === ROLES.SENDER ? word[i].toUpperCase() : ""
 
       input.addEventListener("focus", (e) => {
-         if (currentLetterIndex.letter != i) return input.blur()
+         input.classList.remove("active")
+         if (currentLetterIndex.letter != i || blockInput) return input.blur()
          input.classList.add("active")
          if (role === ROLES.SENDER || tutorial?.disable) return input.blur()
       })
       input.addEventListener("blur", (e) => {
          if (role === ROLES.SENDER || tutorial?.disable) return
          input.classList.remove("active")
-         if (currentLetterIndex.letter === i) return input.focus()
-         input.blur()
+         if (currentLetterIndex.letter === i && !blockInput) {
+            console.log("MEMEMEME1");
+            return input.focus()
+         }
       })
       input.addEventListener("input", async (e) => {
          input.value = input.value.toUpperCase()
-         if (!input.value.toUpperCase().match(/[A-Z]/g)) return input.value = (input.value.length === 1) ? input.value : lastInput
-         if (Date.now() - lastBadInput < 1100) return input.value = (input.value.length === 1) ? input.value : lastInput
+         if (!input.value.match(/[A-Z]/g)) return input.value = ""
+         if (Date.now() - lastBadInput < 1100) return input.value = ""
+         if (blockInput) { input.blur(); return input.value = "" }
          const value = input.value
          const letter = value.slice(-1)
          lastInput = letter
@@ -160,7 +167,7 @@ function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
                   pointer.style.left = `${30 + currentLetterIndex.letter * (60 + 10) - 8}px`
                }, 1000)
             }
-            if (document.getElementById("word") && currentLetterIndex.letter < MAX_LENGTH) {
+            if (document.getElementById("word") && currentLetterIndex.letter < MAX_LENGTH && tutorial) {
                document.querySelectorAll(".placeholder")[currentLetterIndex.letter].focus()
             }
          } else {
@@ -244,7 +251,7 @@ function finishWord(cb) {
    setTimeout(() => {
       main.innerText = ""
       main.append(correctMark)
-      document.getElementById("progress-numbers").innerText = "1 / 1"
+      document.getElementById("progress-numbers").innerText = `${currentLetterIndex.word} / ${AMOUNT_OF_WORDS}`
       correctMark.style.width = `${128}px`
       correctMark.style.height = `${128}px`
       setTimeout(() => {
@@ -263,72 +270,119 @@ class Game {
       AMOUNT_OF_WORDS = this.words.length
       this.serverTime = await startTime()
       this.countdown()
+      const playersProgress = await progress()
+      let sumOfWords = 0
+      currentLetterIndex.word = 0
+      currentLetterIndex.letter = 0
+      currentLetterIndex.ready = true
+      while (playersProgress[USER_ROLE] > sumOfWords) {
+         if (sumOfWords + this.words[currentLetterIndex.word].length <= playersProgress[USER_ROLE]) {
+            sumOfWords += this.words[currentLetterIndex.word].length
+            currentLetterIndex.word += 1
+         } else {
+            currentLetterIndex.letter = playersProgress[USER_ROLE] - sumOfWords
+            sumOfWords += currentLetterIndex.letter
+         }
+      }
+      console.log(currentLetterIndex);
+
+
       setTimeout(async () => {
          await this.round()
          if (USER_ROLE === ROLES.SENDER) {
             this.senderEvents()
          }
-      }, this.serverTime - Date.now() > 2000 ? this.serverTime - Date.now() : 2000)
+      }, this.serverTime - Date.now() > 0 ? this.serverTime - Date.now() : 0)
+
+      progressTracker = setInterval(async () => {
+         if (currentLetterIndex.word >= AMOUNT_OF_WORDS) return this.end()
+         const secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
+         const wordsLengths = this.words.slice(0, currentLetterIndex.word).map((el) => el.length)
+         const previousWordsLength = wordsLengths.length > 0 ? wordsLengths.reduce((a, b) => a + b) : 0
 
 
-      // progressTracker = setInterval(async () => {
-      //    if (currentLetterIndex.word >= AMOUNT_OF_WORDS) return clearInterval(progressTracker)
-      //    const data = await progress()
-      //    const previousWordsLength =
-      //       this.words.slice(0, -1 * currentLetterIndex.word).map((el) => el.length).reduce((a, b) => a + b)
-      //    // moves pointer on sender
-      //    if (USER_ROLE === ROLES.SENDER) {
-      //       const pointer = document.getElementById("word-pointer")
-      //       pointer.style.left = `${30 + (data.progress - previousWordsLength) * (60 + 10) - 8}px`
-      //    }
+         // moves pointer on sender
+         if (USER_ROLE === ROLES.SENDER && document.getElementById("word-pointer")) {
+            const pointer = document.getElementById("word-pointer")
+            pointer.style.left = `${30 + (secondPlayerProgress - previousWordsLength) * (60 + 10) - 8}px`
+         }
 
-      //    // displays letters with light on receiver
-      //    if (USER_ROLE === ROLES.RECEIVER && data.progress < previousWordsLength + currentLetterIndex.letter) {
-      //       const letter = this.words[currentLetterIndex.word][currentLetterIndex.letter]
-      //       this.playMessage(letter, this.lastLetter !== letter)
-      //       this.lastLetter = letter
-      //    }
-      // }, 1000)
+         // displays letters with light on receiver
+         if (USER_ROLE === ROLES.RECEIVER) {
+            if (secondPlayerProgress > previousWordsLength + currentLetterIndex.letter) {
+               blockInput = false
+               const letter = this.words[currentLetterIndex.word][currentLetterIndex.letter]
+               this.playMessage(letter, this.lastLetter !== letter)
+               this.lastLetter = letter
+               if (document.querySelectorAll(".placeholder").length > 0) {
+                  console.log('3');
 
-      // const overheatIcons = document.querySelectorAll(".scoring-server")
-      // errorTracker = setInterval(async () => {
-      //    const mistakes = await errors()
-      //    for (let i = 0; i < mistakes; i++) {
-      //       overheatIcons[i].classList.remove("hidden")
-      //    }
-      //    if (mistakes > 2) {
-      //       clearInterval(errorTracker)
-      //    }
-      // }, 1000)
+                  document.querySelectorAll(".placeholder")[currentLetterIndex.letter].focus()
+               }
+            } else {
+               blockInput = true
+            }
+         }
+      }, 1000)
+
+      const overheatIcons = document.querySelectorAll(".scoring-icons")
+      errorTracker = setInterval(async () => {
+         const mistakes = await errors()
+         for (let i = 0; i < mistakes; i++) {
+            overheatIcons[i].classList.remove("hidden")
+         }
+         if (mistakes > 2) {
+            clearInterval(errorTracker)
+         }
+      }, 1000)
+   }
+
+   end() {
+      clearInterval(progressTracker)
    }
 
    async round() {
       document.getElementById("progress-numbers").innerText = `${currentLetterIndex.word} / ${AMOUNT_OF_WORDS}`
       await this.mainBuilder()
+      if (currentLetterIndex.letter !== 0 || currentLetterIndex.word !== 0) {
+         this.rejoinFill()
+      }
+   }
+
+   rejoinFill() {
+      const allPlaceholders = document.querySelectorAll(".placeholder")
+      for (let i = 0; i < currentLetterIndex.letter; i++) {
+         const node = allPlaceholders[i];
+         node.value = this.words[currentLetterIndex.word][i].toUpperCase()
+         node.classList.add("correct")
+         node.classList.remove("active")
+      }
    }
 
    handleKeyDown(e) {
+      if (blockInput) return
       if (document.querySelectorAll(".placeholder").length <= 0) return
       const inputBar = document.getElementById("lights-message-display")
       if (!inputBar) return
       const inputLength = inputBar.children.length
       if (inputLength > 4 && e.code !== "Backspace") return
       const lightProbe = document.getElementById("lights-morse")
-      if (!this.transmitting && e.code === "Space") {
-         this.transmitting = true
-         this.time = Date.now()
+      if (!isTransmitting && e.code === "Space") {
+         isTransmitting = true
+         timeHoldingSpace = Date.now()
          lightProbe.classList.add("on")
       }
    }
 
    handleKeyUp(e) {
+      if (blockInput) return
       if (document.querySelectorAll(".placeholder").length <= 0) return
       const inputBar = document.getElementById("lights-message-display")
       if (!inputBar) return
       const inputLength = inputBar.children.length
       if (inputLength > 4 && e.code !== "Backspace") return
       const lightProbe = document.getElementById("lights-morse")
-      this.transmitting = false
+      isTransmitting = false
       if (e.code === "Backspace") {
          if (inputLength - 1 <= 0) {
             for (const node of document.getElementById("translation-list").children) {
@@ -351,7 +405,7 @@ class Game {
 
       if (e.code === "Space") {
          lightProbe.classList.remove("on")
-         if (Date.now() - this.time > TIMINGS.DOT) {
+         if (Date.now() - timeHoldingSpace > TIMINGS.DOT) {
             const dash = document.createElement("div")
             dash.classList.add("morse-dash")
             inputBar.append(dash)
@@ -385,29 +439,23 @@ class Game {
    }
 
    senderEvents() {
-      this.time = null
-      this.transmitting = false
       window.removeEventListener("keydown", this.handleKeyDown)
       window.addEventListener("keydown", this.handleKeyDown)
-      window.removeEventListener("keyup", this.handleKeyDown)
-      window.addEventListener("keyup", this.handleKeyDown)
+      window.removeEventListener("keyup", this.handleKeyUp)
+      window.addEventListener("keyup", this.handleKeyUp)
    }
 
    async mainBuilder(tutorial) {
       const word = tutorial?.text ?? this.words[currentLetterIndex.word]
-      console.log(word, this.words);
 
       MAX_LENGTH = word.length
-
+      document.getElementById("main").innerText = ""
       document.getElementById("main").append(LetterPlaceholder({
          role: USER_ROLE,
          word,
          tutorial
       }))
       this.timer(word)
-      if (USER_ROLE === ROLES.RECEIVER) {
-         document.querySelectorAll(".placeholder")[0].focus()
-      }
    }
 
    async layout() {

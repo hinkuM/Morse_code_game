@@ -179,6 +179,7 @@ def check_session(request: Request, conn: sqlite3.Connection = Depends(get_db_ac
    return user_session_id
 
 
+
 def ensure_session(request: Request):
    user_session_id = request.session.get("user_session_id")
    if user_session_id is None:
@@ -208,6 +209,7 @@ def index(request: Request, user_session_id=Depends(check_session), conn: sqlite
       return FileResponse(f"{FRONTEND}/views/room.html")
    return RedirectResponse(url="/waiting")
 
+
 @app.get("/leave")
 def leave_room( request: Request):
    if not request.session["user_session_id"]:
@@ -225,12 +227,14 @@ def index(conn: sqlite3.Connection = Depends(get_db_access)):
    rows = cursor.fetchall()
    return { "code": "ok", "data": rows }
 
+
 @app.get("/players")
 def index(conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
    cursor.execute(f"SELECT * FROM {PLAYERS_DB}")
    rows = cursor.fetchall()
    return { "code": "ok", "data": rows }
+
 
 @app.get("/progress")
 def index(conn: sqlite3.Connection = Depends(get_db_access)):
@@ -341,8 +345,6 @@ def send_sentence(body: Amount_of_skips, request: Request, user_session_id=Depen
         cursor.execute(f"UPDATE {PROGRESS_DB} SET tutorial_start = 1, tutorial_end = 1 WHERE player_id = ?", (user_session_id,))
     elif body.amount == 3:
         cursor.execute(f"UPDATE {PROGRESS_DB} SET tutorial_start = 1, tutorial_end = 1, game_start = 1 WHERE player_id = ?", (user_session_id,))
-
-    conn.commit()
     return {"code": "ok", "data": 0}
 
 # WHAT ROLE IS HE PLAYING
@@ -377,16 +379,19 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
    errors = cursor.fetchone()
    return { "code": "ok", "data": errors["errors"] }
 
-# SENDS HOW MANY LETTERS ANOTHER PLAYER GUESSED
+# SENDS HOW MANY CORRECT GUESSES BOTH PLAYERS SEPERATELY MADE
 @app.post("/room/progress", status_code=200)
 def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
    cursor.execute(
-      f"SELECT correct_guesses FROM {PLAYERS_DB} WHERE room_id = (?) AND player_id <> (?)",
-      (request.session["user_session_room"], user_session_id)
+      f"SELECT role, correct_guesses FROM {PLAYERS_DB} WHERE room_id = (?)",
+      (request.session["user_session_room"],)
    )
-   progress = cursor.fetchone()
-   return { "code": "ok", "data": {"progress": progress["correct_guesses"] } }
+   results = cursor.fetchall()
+   progress = {Role.sender:  0, Role.receiver: 0}
+   for i in range(2):
+      progress[results[i]["role"]] = results[i]["correct_guesses"]
+   return { "code": "ok", "data": progress }
 
 # CHECKS IF PLAYERS ARE BOTH READY TO PLAY
 @app.post("/room/ready", status_code=200)
@@ -549,6 +554,8 @@ def verify_guess(body: Guess, request: Request, user_session_id=Depends(check_se
          f"UPDATE {PLAYERS_DB} SET incorrect_guesses = incorrect_guesses + 1 WHERE player_id = (?)",
          (user_session_id,)
       )
+      conn.commit()
+      print(user_session_id, cursor.rowcount)
       raise HTTPException(status_code=400, detail="wrong letter")
 
    cursor.execute(
