@@ -17,7 +17,7 @@ const MORSE_TRANSLATION = [
    { letter: "H", morse: "••••" },
    { letter: "I", morse: "••" },
    { letter: "J", morse: "•᠆᠆᠆" },
-   { letter: "K", morse: "•᠆•" },
+   { letter: "K", morse: "᠆•᠆" },
    { letter: "L", morse: "•᠆••" },
    { letter: "M", morse: "᠆᠆" },
    { letter: "N", morse: "᠆•" },
@@ -262,16 +262,13 @@ class Game {
       this.words = (await sentence()).split(" ")
       AMOUNT_OF_WORDS = this.words.length
       this.serverTime = await startTime()
-      console.log(Date.now() - this.serverTime, this.serverTime);
-
       this.countdown()
       setTimeout(async () => {
          await this.round()
          if (USER_ROLE === ROLES.SENDER) {
             this.senderEvents()
          }
-
-      }, READY_TIMER + 3000)
+      }, this.serverTime - Date.now() > 2000 ? this.serverTime - Date.now() : 2000)
 
 
       // progressTracker = setInterval(async () => {
@@ -306,6 +303,7 @@ class Game {
    }
 
    async round() {
+      document.getElementById("progress-numbers").innerText = `${currentLetterIndex.word} / ${AMOUNT_OF_WORDS}`
       await this.mainBuilder()
    }
 
@@ -396,7 +394,9 @@ class Game {
    }
 
    async mainBuilder(tutorial) {
-      const word = tutorial.text ?? this.words[currentLetterIndex.word]
+      const word = tutorial?.text ?? this.words[currentLetterIndex.word]
+      console.log(word, this.words);
+
       MAX_LENGTH = word.length
 
       document.getElementById("main").append(LetterPlaceholder({
@@ -560,7 +560,7 @@ class Game {
          progressTitle.setAttribute("id", "progress-title")
          progressTitle.innerText = "Ustabilizowane próbki"
          progressNumbers.setAttribute("id", "progress-numbers")
-         progressNumbers.innerText = "0 / 1"
+         progressNumbers.innerText = "0 / ?"
          asideProgressContainer.append(progressTitle, progressNumbers)
 
          asideLeft.append(asidePointsContainer, asideProgressContainer)
@@ -595,6 +595,7 @@ class Game {
       const word = "ukenium".toUpperCase()
       AMOUNT_OF_WORDS = 1
       await this.mainBuilder({ text: word })
+      document.getElementById("progress-numbers").innerText = `${currentLetterIndex.word} / 1`
       if (USER_ROLE === ROLES.RECEIVER) {
          setTimeout(() => {
             progressTracker = setInterval(async () => {
@@ -656,7 +657,7 @@ class Game {
    }
 
    countdown() {
-      const endTime = this.serverTime + READY_TIMER
+      const endTime = this.serverTime - 1000 * 2
       const timer = setInterval(async () => {
          const time = endTime - Date.now()
          if (time <= 0) {
@@ -677,46 +678,71 @@ class Game {
 
    timer(word) {
       const time = 1000 * TIME_PER_LETTER_SECONDS * word.length
-      if (Date.now() - this.serverTime > 0) { }
       const bar = document.getElementById("header-timer-bar")
       bar.style.transition = "none"
       bar.style.width = "100%"
 
       const onePercentage = time / 100
-      let currentWidth = 100
-      setTimeout(() => {
-         clearInterval(barInterval)
-         bar.style.transition = "width 0.3s ease"
-         barInterval = setInterval(() => {
-            currentWidth -= 1
-            console.log(currentWidth);
-            bar.style.width = currentWidth + "%"
-            if (currentWidth > 60) {
-               bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+      let currentWidth = 100 + (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0) < 0 ? 0 : 100 + (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0)
+      clearInterval(barInterval)
+      {
+         if (currentWidth > 0) currentWidth -= 1
+         bar.style.width = currentWidth + "%"
+         if (currentWidth > 60) {
+            bar.style.backgroundImage = `repeating-linear-gradient(45deg,
             rgb(0, 229, 0) 0,
             rgba(0, 255, 0, 0.35) 8px,
             #d4000000 8px,
             transparent 16px)`
-            }
-            else if (currentWidth <= 60 && currentWidth > 20) {
-               bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+         }
+         else if (currentWidth <= 60 && currentWidth > 20) {
+            bar.style.backgroundImage = `repeating-linear-gradient(45deg,
             rgb(229, 187, 0) 0,
             rgba(255, 238, 0, 0.35) 8px,
             #d4000000 8px,
             transparent 16px)`
-            }
-            else if (currentWidth <= 20) {
-               bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+         }
+         else if (currentWidth <= 20) {
+            bar.style.backgroundImage = `repeating-linear-gradient(45deg,
                rgb(229, 0, 0) 0,
                rgba(255, 0, 0, 0.35) 8px,
                #d4000000 8px,
                transparent 16px)`
-            }
-            if (currentWidth <= 0) {
-               clearInterval(barInterval)
-            }
-         }, onePercentage)
-      }, 300)
+         }
+         if (currentWidth <= 0) {
+            clearInterval(barInterval)
+         }
+      }
+      bar.style.transition = "width 0.3s ease"
+      barInterval = setInterval(() => {
+         if (currentWidth > 0) currentWidth -= 1
+         bar.style.width = currentWidth + "%"
+         if (currentWidth > 60) {
+            bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+            rgb(0, 229, 0) 0,
+            rgba(0, 255, 0, 0.35) 8px,
+            #d4000000 8px,
+            transparent 16px)`
+         }
+         else if (currentWidth <= 60 && currentWidth > 20) {
+            bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+            rgb(229, 187, 0) 0,
+            rgba(255, 238, 0, 0.35) 8px,
+            #d4000000 8px,
+            transparent 16px)`
+         }
+         else if (currentWidth <= 20) {
+            bar.style.backgroundImage = `repeating-linear-gradient(45deg,
+               rgb(229, 0, 0) 0,
+               rgba(255, 0, 0, 0.35) 8px,
+               #d4000000 8px,
+               transparent 16px)`
+         }
+         if (currentWidth <= 0) {
+            clearInterval(barInterval)
+         }
+      }, onePercentage)
+
    }
 
    createTranslation(table) {
@@ -1173,7 +1199,7 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
    }
    if (role === ROLES.RECEIVER) {
       currentLetterIndex.ready = false
-      const result = tutorial ? tutorial.text[currentLetterIndex.letter].toUpperCase() === letter.toUpperCase() :
+      const result = tutorial ? tutorial?.text[currentLetterIndex.letter].toUpperCase() === letter.toUpperCase() :
          await verifyGuess(letter, currentLetterIndex.letter)
       currentLetterIndex.ready = true
       if (!result) return false

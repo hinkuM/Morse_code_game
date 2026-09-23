@@ -3,8 +3,8 @@
 # GLOBAL VARIABLES
 API_BASE = "/api"
 SENTENCES = [
-   "Hello".lower(),
-   "Hello me explode fast us".lower(),
+   "uranium cobalt oxygen".lower(),
+   "Azerbejdzan me explode fast us".lower(),
    "This IS working".lower(),
    "Cosmic theme game mhm".lower()
 ]
@@ -12,6 +12,8 @@ SENTENCES_TRIMED = [sentence.replace(" ", "") for sentence in SENTENCES]
 NUMBER_OF_ROOMS = 4
 BASE_TIMEOUT_IN_SECONDS = 1
 MAX_TIMEOUT_ATTEMPTS = 5
+TIME_FOR_LOADING = 1000 * 12
+TIME_PER_LETTER = 1000 * 12
 ROOMS_DB = "rooms"
 PLAYERS_DB = "players"
 PROGRESS_DB = "progress"
@@ -66,9 +68,9 @@ def create_database_tables():
          CREATE TABLE IF NOT EXISTS {ROOMS_DB} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
-            last_join_time INTEGER NOT NULL DEFAULT {int(time.time() * 1000)},
+            last_join_time INTEGER NOT NULL DEFAULT {0},
             game_started INTEGER DEFAULT 0,
-            game_start_time INTEGER NOT NULL DEFAULT {int(time.time()* 1000)}
+            game_start_time INTEGER NOT NULL DEFAULT {0}
          )
       ''')
       cursor.execute(f'''
@@ -97,13 +99,19 @@ def create_database_tables():
       cursor.execute(f'''
          CREATE TABLE IF NOT EXISTS {RESULTS_DB} (
             game_number INTEGER PRIMARY KEY AUTOINCREMENT,
-            team_name TEXT NOT NULL,
+            receiver_id TEXT NOT NULL UNIQUE,
+            team_name TEXT NULL DEFAULT NULL,
             room_id INTEGER NOT NULL,
             point_no_error INTEGER NOT NULL DEFAULT 1,
             point_time INTEGER NOT NULL DEFAULT 1,
             sentence TEXT NOT NULL,
-            time INTEGER NOT NULL,
-            FOREIGN KEY (room_id) REFERENCES {ROOMS_DB}(id)
+            word_one INTEGER NULL DEFAULT NULL,
+            word_two INTEGER NULL DEFAULT NULL,
+            word_three INTEGER NULL DEFAULT NULL,
+            word_four INTEGER NULL DEFAULT NULL,
+            word_five INTEGER NULL DEFAULT NULL,
+            FOREIGN KEY (room_id) REFERENCES {ROOMS_DB}(id),
+            FOREIGN KEY (receiver_id) REFERENCES {PLAYERS_DB}(player_id)
          )
       ''')
       conn.commit()
@@ -398,18 +406,48 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
       (request.session["user_session_room"],)
    )
    gameReady = cursor.fetchone()
+   if request.session["user_session_role"] == Role.receiver:
+      cursor.execute(
+         f"INSERT OR IGNORE INTO {RESULTS_DB} (receiver_id, room_id, sentence) VALUES (?,?,?)", 
+         (user_session_id,request.session["user_session_room"], SENTENCES[request.session["user_session_room"]])
+      )
    if isReady["ready"] == 1 and gameReady["game_started"] != 1:
       cursor.execute(
-         f"UPDATE {ROOMS_DB} SET game_started = 1, game_start_time = {int(time.time()* 1000)} WHERE id = (?)", 
+         f"UPDATE {ROOMS_DB} SET game_started = 1, game_start_time = {int(time.time()* 1000 + TIME_FOR_LOADING)} WHERE id = (?)", 
          (request.session["user_session_room"],)
-         )
-      
+      )
    return { "code": "ok", "data": True if isReady["ready"] == 1 else False }
+
+class Word(BaseModel):
+   index: int
+
+# UPDATES RESULTS WITH TIME ON EACH WORD
+@app.post("/room/word", status_code=200)
+def send_sentence(body: Word,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"SELECT game_start_time FROM {ROOMS_DB} WHERE id = (?)",
+      (request.session["user_session_room"],)
+   )
+   start_time = cursor.fetchone()["game_start_time"]
+   word_time = int((time.time() * 1000 + TIME_FOR_LOADING) - start_time)
+   word_index = "one"
+   if body.index == 1: word_index = "two"
+   elif body.index == 2: word_index = "three"
+   elif body.index == 3: word_index = "four"
+   elif body.index == 4: word_index = "five"
+
+   cursor.execute(
+      f"UPDATE {RESULTS_DB} SET word_{word_index} = (?) WHERE receiver_id = (?)", 
+      (word_time, user_session_id)
+   )
+   return { "code": "ok" }
+
 
 class Team_name(BaseModel):
    teamName: str
 
-# CHECKS IF GAME WAS FINISHED AND SAVES RESULTS
+# CHECKS IF GAME WAS FINISHED AND UPDATES RESULTS
 @app.post("/room/finish", status_code=200)
 def send_sentence(body: Team_name,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
@@ -428,14 +466,22 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
    print(count_errors["errors"])
    no_errors = True if count_errors["errors"] == 0 else False
    cursor.execute(
-      f"SELECT game_start_time FROM {ROOMS_DB} WHERE id = (?)",
-      (request.session["user_session_room"],)
+      f"SELECT word_one, word_two, word_three, word_four, word_five FROM {RESULTS_DB} WHERE receiver_id = (?)",
+      (user_session_id,)
    )
-   game_start_time = cursor.fetchone()["game_start_time"]
-   in_time = True if game_start_time < int(time.time() * 1000) + 1000 * 60 * 5  else False
+   words = cursor.fetchone()
+   if words is None:
+      raise HTTPException(status_code=400, detail="Wrong times on words")
+   
+   correct_words = SENTENCES[request.session["user_session_room"]].split(" ")
+   in_time = True
+   for i in range(5):
+      if words[i] > int(len(correct_words[i]) * TIME_PER_LETTER):
+         in_time = False
+
    if len(body.teamName) > 0:
-      cursor.execute(f"INSERT INTO {RESULTS_DB} (team_name, room_id, point_no_error, point_time, sentence, time) VALUES (?, ?, ?, ?, ?, ?)", 
-         (body.teamName, request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, SENTENCES[request.session["user_session_room"]], int(time.time() * 1000) - milliseconds - 5000 )
+      cursor.execute(f"UPDATE {RESULTS_DB} SET team_name = ?, room_id = ?, point_no_error = ?, point_time = ? WHERE receiver_id = (?)", 
+         (body.teamName, request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, user_session_id)
       )
    cursor.execute(
       f"UPDATE {PLAYERS_DB} SET ready = 0 WHERE player_id = (?)", 
