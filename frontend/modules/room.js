@@ -287,6 +287,7 @@ class Game {
    }
 
    async start() {
+      clearInterval(progressTracker)
       this.words = (await sentence()).split(" ")
       AMOUNT_OF_WORDS = this.words.length
       this.serverTime = await startTime()
@@ -709,8 +710,8 @@ class Game {
       if (this.playing && !force) return
       for (const timeout of this.timeouts) {
          clearTimeout(timeout)
+         this.timeouts = this.timeouts.filter((el) => el != timeout)
       }
-      this.timeouts = []
       this.playing = true
       messageLight.classList.remove("on")
       const lightTimeout = setTimeout(() => {
@@ -732,9 +733,10 @@ class Game {
       for (const time of blinking) {
          const timeout = setTimeout(() => {
             morseLight.classList.add("on")
-            setTimeout(() => {
+            const a = setTimeout(() => {
                morseLight.classList.remove("on")
             }, time)
+            this.timeouts.push(a)
          }, counter)
          this.timeouts.push(timeout)
          counter += time + TIMINGS.PAUSE

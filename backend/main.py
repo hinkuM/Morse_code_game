@@ -448,12 +448,7 @@ class Word(BaseModel):
 @app.post("/room/word", status_code=200)
 def send_sentence(body: Word,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
-   cursor.execute(
-      f"SELECT game_start_time FROM {ROOMS_DB} WHERE id = (?)",
-      (request.session["user_session_room"],)
-   )
-   start_time = cursor.fetchone()["game_start_time"]
-   word_time = int((time.time() * 1000 + TIME_FOR_LOADING) - start_time)
+   word_time = int((time.time() * 1000 + 3000))
    word_index = "one"
    if body.index == 1: word_index = "two"
    elif body.index == 2: word_index = "three"
