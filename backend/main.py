@@ -365,8 +365,26 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
       f"SELECT game_start_time FROM {ROOMS_DB} WHERE id = (?)",
       (request.session["user_session_room"],)
    )
-   start_time = cursor.fetchone()
-   return { "code": "ok", "data": start_time["game_start_time"] }
+   row = cursor.fetchone()
+   if row is None:
+      raise HTTPException(status_code=404, detail="Room not found")
+   start_time = row["game_start_time"]
+   cursor.execute(
+      f"SELECT word_one, word_two, word_three, word_four, word_five  FROM {ROOMS_DB} WHERE id = (?)",
+      (request.session["user_session_room"],)
+   )
+   words_time = cursor.fetchone()
+
+   if words_time["word_four"] is not None:
+      start_time = words_time["word_four"]
+   elif words_time["word_three"] is not None:
+      start_time = words_time["word_three"]
+   elif words_time["word_two"] is not None:
+      start_time = words_time["word_two"]
+   elif words_time["word_one"] is not None:
+      start_time = words_time["word_one"]
+
+   return { "code": "ok", "data": start_time }
 
 # SENDS HOW MANY MISTAKES USERS MADE
 @app.post("/room/errors", status_code=200)
@@ -448,9 +466,20 @@ def send_sentence(body: Word,request: Request, user_session_id=Depends(check_ses
    )
    return { "code": "ok" }
 
-
 class Team_name(BaseModel):
    teamName: str
+
+@app.post("/room/teamName", status_code=200)
+def send_sentence(body: Team_name,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"UPDATE {RESULTS_DB} SET team_name WHERE receiver_id = (?)", 
+      (body.teamName, user_session_id)
+   )
+   return { "code": "ok" }
+
+
+
 
 # CHECKS IF GAME WAS FINISHED AND UPDATES RESULTS
 @app.post("/room/finish", status_code=200)
@@ -484,9 +513,9 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
       if words[i] > int(len(correct_words[i]) * TIME_PER_LETTER):
          in_time = False
 
-   if len(body.teamName) > 0:
-      cursor.execute(f"UPDATE {RESULTS_DB} SET team_name = ?, room_id = ?, point_no_error = ?, point_time = ? WHERE receiver_id = (?)", 
-         (body.teamName, request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, user_session_id)
+   if request.session["user_session_role"] == Role.sender:
+      cursor.execute(f"UPDATE {RESULTS_DB} SET room_id = ?, point_no_error = ?, point_time = ? WHERE receiver_id = (?)", 
+         (request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, user_session_id)
       )
    cursor.execute(
       f"UPDATE {PLAYERS_DB} SET ready = 0 WHERE player_id = (?)", 

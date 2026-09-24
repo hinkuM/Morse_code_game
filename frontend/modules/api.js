@@ -171,6 +171,34 @@ export function skips(amount) {
    )
 }
 
+export function saveWordTime(index) {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "room/word",
+         data: { index },
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
+export function teamName(teamName) {
+   return apiRequester(
+      {
+         method: "POST",
+         url: "room/teamName",
+         data: { teamName },
+         contentType: "application/json",
+         success: (response) => {
+            return response
+         },
+      }
+   )
+}
+
 async function apiRequester({ method, url, data = {}, contentType = null }) {
    const options = {
       method,

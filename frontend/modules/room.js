@@ -1,10 +1,10 @@
 import {
    role, sentence, verifyGuess, senderGuess, skips,
-   startTime, errors, isReady, finish, progress, restart
+   startTime, errors, isReady, finish, progress, restart, saveWordTime, teamName
 } from "./api.js"
 
 const terminalContainer = document.getElementById("content")
-
+const HUMAN_SPEED = 50 //ms
 const TIME_PER_LETTER_SECONDS = 12
 const MORSE_TRANSLATION = [
    { letter: "A", morse: "•᠆" },
@@ -45,6 +45,11 @@ const TIMINGS = Object.freeze({
    PAUSE: 200,
 })
 const USER_ROLE = await role()
+let secondPlayerProgress = null
+let wordsLengths = null
+let previousWordsLength = null
+
+
 
 const READY_TIMER = 1000 * 10
 const TIME_BEFORE_SKIP_TUTORIAL = 10 // 3000
@@ -60,7 +65,6 @@ if (CURRENT_STAGE === 1) {
 } else if (CURRENT_STAGE === 3) {
    terminalContainer.classList.add("start-game")
 }
-console.log(CURRENT_STAGE);
 
 const currentLetterIndex = { ready: true, letter: 0, word: 0 }
 let MAX_LENGTH
@@ -70,9 +74,7 @@ let timeHoldingSpace = null
 let isTransmitting = false
 let blockInput = false
 
-let timeCheckerInterval
 let progressTracker
-let teamName
 let errorTracker
 let errorIndicatorTimeout
 let clearBadSender
@@ -197,27 +199,46 @@ async function restartGame() {
 }
 
 async function endGame() {
-   clearInterval(timeCheckerInterval)
    clearInterval(progressTracker)
    clearInterval(errorTracker)
-   const data = await finish(teamName)
-   const score = data.no_errors && data.in_time ? 3 : data.no_errors || data.in_time ? 2 : 1
-   const container = document.createElement("dialog")
-   const title = document.createElement("div")
-   const restart = document.createElement("button")
-
-   container.setAttribute("id", "end")
-
-   title.setAttribute("id", "end-title")
-   title.innerText = "Ukończyłeś zadanie! Otrzymujesz " + score + " punkty!"
-   restart.innerText = "restart"
-   restart.addEventListener("click", async () => {
-      await restartGame()
-   })
-
-   container.append(title, restart)
-   document.body.append(container)
-   container.showModal()
+   if (USER_ROLE === ROLES.RECEIVER) {
+      const container = popUp({
+         x: -1, y: -1,
+         width: 360,
+         height: 350,
+         titl: "Wpisz nazwę drużyny",
+         txt: ""
+      })
+      terminalContainer.append(container)
+      const inp = document.createElement("input")
+      const btn = document.createElement("button")
+      btn.innerText = "Prześlij"
+      document.getElementById("window").children[1].append(inp, btn)
+      btn.addEventListener("click", async () => {
+         teamName(inp.value)
+         const data = await finish()
+         const container = popUp({
+            x: -1, y: -1,
+            width: 360,
+            height: 350,
+            titl: data.point_time === 1 ? "Gratulacje, uratowaliście wszystkie próbki" : "Niestety nie udało się uratować wszystkich próbek",
+            txt: data.point_no_error === 1 ? "Nie przegrzaliście wszystkich serwerów!" : "Wszystkie serwery zostały przegrzane :(",
+         })
+         terminalContainer.append(container)
+         terminalContainer.classList.add("end-game")
+      })
+   } else if (USER_ROLE === ROLES.SENDER) {
+      const data = await finish()
+      const container = popUp({
+         x: -1, y: -1,
+         width: 360,
+         height: 350,
+         titl: data.point_time === 1 ? "Gratulacje, uratowaliście wszystkie próbki" : "Niestety nie udało się uratować wszystkich próbek",
+         txt: data.point_no_error === 1 ? "Nie przegrzaliście wszystkich serwerów!" : "Wszystkie serwery zostały przegrzane :(",
+      })
+      terminalContainer.append(container)
+      terminalContainer.classList.add("end-game")
+   }
 }
 
 function endTutorial() {
@@ -284,27 +305,31 @@ class Game {
             sumOfWords += currentLetterIndex.letter
          }
       }
-      console.log(currentLetterIndex);
-
+      secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
+      wordsLengths = this.words.slice(0, currentLetterIndex.word).map((el) => el.length)
+      previousWordsLength = wordsLengths.length > 0 ? wordsLengths.reduce((a, b) => a + b) : 0
 
       setTimeout(async () => {
          await this.round()
-         if (USER_ROLE === ROLES.SENDER) {
-            this.senderEvents()
-         }
       }, this.serverTime - Date.now() > 0 ? this.serverTime - Date.now() : 0)
 
       progressTracker = setInterval(async () => {
-         if (currentLetterIndex.word >= AMOUNT_OF_WORDS) return this.end()
-         const secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
-         const wordsLengths = this.words.slice(0, currentLetterIndex.word).map((el) => el.length)
-         const previousWordsLength = wordsLengths.length > 0 ? wordsLengths.reduce((a, b) => a + b) : 0
+         secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
+         wordsLengths = this.words.slice(0, currentLetterIndex.word).map((el) => el.length)
+         previousWordsLength = wordsLengths.length > 0 ? wordsLengths.reduce((a, b) => a + b) : 0
 
 
          // moves pointer on sender
          if (USER_ROLE === ROLES.SENDER && document.getElementById("word-pointer")) {
             const pointer = document.getElementById("word-pointer")
-            pointer.style.left = `${30 + (secondPlayerProgress - previousWordsLength) * (60 + 10) - 8}px`
+            const fromLeft = (secondPlayerProgress - previousWordsLength >= 0 ? secondPlayerProgress - previousWordsLength : secondPlayerProgress - previousWordsLength + this.words[currentLetterIndex.word - 1].length)
+            if (currentLetterIndex.word === AMOUNT_OF_WORDS) {
+               pointer.style.left = `${30 + (fromLeft > this.words[currentLetterIndex.word - 1].length ? this.words[currentLetterIndex.word - 1].length : fromLeft) * (60 + 10) - 8}px`
+            } else {
+               const previous = (secondPlayerProgress < previousWordsLength && currentLetterIndex.letter === 0 ? true : false)
+               pointer.style.left = `${30 + (fromLeft > this.words[previous ? currentLetterIndex.word - 1 : currentLetterIndex.word].length ? this.words[previous ? currentLetterIndex.word - 1 : currentLetterIndex.word].length : fromLeft) * (60 + 10) - 8}px`
+            }
+
          }
 
          // displays letters with light on receiver
@@ -315,8 +340,6 @@ class Game {
                this.playMessage(letter, this.lastLetter !== letter)
                this.lastLetter = letter
                if (document.querySelectorAll(".placeholder").length > 0) {
-                  console.log('3');
-
                   document.querySelectorAll(".placeholder")[currentLetterIndex.letter].focus()
                }
             } else {
@@ -337,29 +360,44 @@ class Game {
       }, 1000)
    }
 
-   end() {
-      clearInterval(progressTracker)
-   }
-
    async round() {
+      this.serverTime = await startTime()
       document.getElementById("progress-numbers").innerText = `${currentLetterIndex.word} / ${AMOUNT_OF_WORDS}`
       await this.mainBuilder()
       if (currentLetterIndex.letter !== 0 || currentLetterIndex.word !== 0) {
          this.rejoinFill()
       }
-   }
-
-   rejoinFill() {
-      const allPlaceholders = document.querySelectorAll(".placeholder")
-      for (let i = 0; i < currentLetterIndex.letter; i++) {
-         const node = allPlaceholders[i];
-         node.value = this.words[currentLetterIndex.word][i].toUpperCase()
-         node.classList.add("correct")
-         node.classList.remove("active")
+      if (USER_ROLE === ROLES.SENDER) {
+         this.senderEvents()
       }
    }
 
+   rejoinFill() {
+      const previous = (secondPlayerProgress < previousWordsLength && currentLetterIndex.letter === 0 ? true : false)
+      const word = this.words[previous ? currentLetterIndex.word - 1 : currentLetterIndex.word]
+      const allPlaceholders = document.querySelectorAll(".placeholder")
+      document.getElementById("progress-numbers").innerText = `${previous ? currentLetterIndex.word - 1 : currentLetterIndex.word} / ${AMOUNT_OF_WORDS}`
+      for (let i = 0; i < (previous ? this.words[currentLetterIndex.word - 1].length : currentLetterIndex.letter); i++) {
+         const node = allPlaceholders[i];
+         node.value = word[i].toUpperCase()
+         node.classList.add("correct")
+         node.classList.remove("active")
+      }
+      if (!previous) return
+      const checkIfNextWord = setInterval(() => {
+         console.log(secondPlayerProgress, previousWordsLength);
+
+         if (secondPlayerProgress === previousWordsLength) {
+            finishWord(() => {
+               gameControls.round()
+            })
+            clearInterval(checkIfNextWord)
+         }
+      }, 500)
+   }
+
    handleKeyDown(e) {
+      if ((secondPlayerProgress < previousWordsLength && currentLetterIndex.letter === 0 ? true : false)) return
       if (blockInput) return
       if (document.querySelectorAll(".placeholder").length <= 0) return
       const inputBar = document.getElementById("lights-message-display")
@@ -375,6 +413,7 @@ class Game {
    }
 
    handleKeyUp(e) {
+      if ((secondPlayerProgress < previousWordsLength && currentLetterIndex.letter === 0 ? true : false)) return
       if (blockInput) return
       if (document.querySelectorAll(".placeholder").length <= 0) return
       const inputBar = document.getElementById("lights-message-display")
@@ -405,6 +444,8 @@ class Game {
 
       if (e.code === "Space") {
          lightProbe.classList.remove("on")
+         if (Date.now() - timeHoldingSpace <= HUMAN_SPEED) return
+
          if (Date.now() - timeHoldingSpace > TIMINGS.DOT) {
             const dash = document.createElement("div")
             dash.classList.add("morse-dash")
@@ -446,7 +487,7 @@ class Game {
    }
 
    async mainBuilder(tutorial) {
-      const word = tutorial?.text ?? this.words[currentLetterIndex.word]
+      const word = tutorial?.text ?? (secondPlayerProgress < previousWordsLength && currentLetterIndex.letter === 0 ? this.words[currentLetterIndex.word - 1] : this.words[currentLetterIndex.word])
 
       MAX_LENGTH = word.length
       document.getElementById("main").innerText = ""
@@ -643,6 +684,7 @@ class Game {
       const word = "ukenium".toUpperCase()
       AMOUNT_OF_WORDS = 1
       await this.mainBuilder({ text: word })
+      document.querySelectorAll(".placeholder")[0].focus()
       document.getElementById("progress-numbers").innerText = `${currentLetterIndex.word} / 1`
       if (USER_ROLE === ROLES.RECEIVER) {
          setTimeout(() => {
@@ -660,6 +702,9 @@ class Game {
    }
 
    playMessage(letter, force) {
+      console.log(letter, this.letter, "RAAH");
+
+      if (!document.getElementById("lights-message")) return
       const messageLight = document.getElementById("lights-message")
       if (this.playing && !force) return
       for (const timeout of this.timeouts) {
@@ -731,7 +776,11 @@ class Game {
       bar.style.width = "100%"
 
       const onePercentage = time / 100
-      let currentWidth = 100 + (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0) < 0 ? 0 : 100 + (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0)
+      const substractTime = (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0) < -100 ? -100 : (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0)
+      console.log(substractTime);
+
+
+      let currentWidth = 100 + substractTime
       clearInterval(barInterval)
       {
          if (currentWidth > 0) currentWidth -= 1
@@ -1248,7 +1297,7 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
    if (role === ROLES.RECEIVER) {
       currentLetterIndex.ready = false
       const result = tutorial ? tutorial?.text[currentLetterIndex.letter].toUpperCase() === letter.toUpperCase() :
-         await verifyGuess(letter, currentLetterIndex.letter)
+         await verifyGuess(letter, currentLetterIndex.letter + previousWordsLength)
       currentLetterIndex.ready = true
       if (!result) return false
    }
@@ -1257,10 +1306,37 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
    if (currentLetterIndex.letter === MAX_LENGTH) {
       currentLetterIndex.letter = 0
       currentLetterIndex.word += 1
-      if (currentLetterIndex.word !== AMOUNT_OF_WORDS) finishWord(gameControls.round())
+      if (currentLetterIndex.word !== AMOUNT_OF_WORDS) {
+         if (USER_ROLE === ROLES.SENDER) {
+            const checkIfNextWord = setInterval(() => {
+               if (secondPlayerProgress === previousWordsLength) {
+                  finishWord(() => {
+                     gameControls.round()
+                  })
+                  clearInterval(checkIfNextWord)
+               }
+            }, 500)
+         } else if (USER_ROLE === ROLES.RECEIVER) {
+            finishWord(() => {
+               gameControls.round()
+            })
+            saveWordTime(currentLetterIndex.word - 1)
+         }
+      }
    }
    if (currentLetterIndex.word === AMOUNT_OF_WORDS) {
-      if (role === ROLES.SENDER) tutorial ? finishWord(endTutorial) : finishWord()
+      if (role === ROLES.SENDER) tutorial ? finishWord(endTutorial) : () => {
+         const checkIfNextWord = setInterval(() => {
+            if (secondPlayerProgress === previousWordsLength) {
+               finishWord(() => {
+                  endGame()
+               })
+               clearInterval(checkIfNextWord)
+            }
+         }, 500)
+      }
+
+
       if (role === ROLES.RECEIVER) tutorial ? finishWord(endTutorial) : finishWord(endGame)
    }
 
@@ -1547,6 +1623,10 @@ const allEvents = new Map([
             }
          }, 500)
       }, 2000)
+   }],
+   ["end-game", async () => {
+      terminalContainer.classList.remove("end-tutorial")
+      await restartGame()
    }],
 ])
 
