@@ -3,7 +3,7 @@
 # GLOBAL VARIABLES
 API_BASE = "/api"
 SENTENCES = [
-   "uranium cobalt oxygen".lower(),
+   "ee bb dd".lower(),
    "Azerbejdzan me explode fast us".lower(),
    "This IS working".lower(),
    "Cosmic theme game mhm".lower()
@@ -13,7 +13,7 @@ NUMBER_OF_ROOMS = 4
 BASE_TIMEOUT_IN_SECONDS = 1
 MAX_TIMEOUT_ATTEMPTS = 5
 TIME_FOR_LOADING = 1000 * 12
-TIME_PER_LETTER = 1000 * 12
+TIME_PER_LETTER = 1000 * 20
 ROOMS_DB = "rooms"
 PLAYERS_DB = "players"
 PROGRESS_DB = "progress"
@@ -76,6 +76,7 @@ def create_database_tables():
       cursor.execute(f'''
          CREATE TABLE IF NOT EXISTS {PLAYERS_DB} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id TEXT,
             player_id TEXT NOT NULL UNIQUE,
             room_id INTEGER NOT NULL,
             role TEXT NOT NULL,
@@ -99,19 +100,19 @@ def create_database_tables():
       cursor.execute(f'''
          CREATE TABLE IF NOT EXISTS {RESULTS_DB} (
             game_number INTEGER PRIMARY KEY AUTOINCREMENT,
-            receiver_id TEXT NOT NULL UNIQUE,
+            game_id TEXT,
             team_name TEXT NULL DEFAULT NULL,
             room_id INTEGER NOT NULL,
             point_no_error INTEGER NOT NULL DEFAULT 1,
             point_time INTEGER NOT NULL DEFAULT 1,
             sentence TEXT NOT NULL,
+            start_time INTEGER NULL DEFAULT NULL,
             word_one INTEGER NULL DEFAULT NULL,
             word_two INTEGER NULL DEFAULT NULL,
             word_three INTEGER NULL DEFAULT NULL,
             word_four INTEGER NULL DEFAULT NULL,
             word_five INTEGER NULL DEFAULT NULL,
-            FOREIGN KEY (room_id) REFERENCES {ROOMS_DB}(id),
-            FOREIGN KEY (receiver_id) REFERENCES {PLAYERS_DB}(player_id)
+            FOREIGN KEY (room_id) REFERENCES {ROOMS_DB}(id)
          )
       ''')
       conn.commit()
@@ -184,6 +185,7 @@ def ensure_session(request: Request):
    user_session_id = request.session.get("user_session_id")
    if user_session_id is None:
       request.session["user_session_id"] = str(uuid.uuid4())
+      request.session["user_session_game_id"] = None
       players_attempts_tracker.setdefault(user_session_id, {"user_attempts": 0, "user_last_attempt": None})
    return request.session["user_session_id"]
 
@@ -205,7 +207,7 @@ def index(request: Request, user_session_id=Depends(check_session), conn: sqlite
    room_data = cursor.fetchone()
    if room_data["player_count"] == 1:
       return RedirectResponse(url="/waiting")
-   if room_data["player_count"] == 2:
+   elif room_data["player_count"] == 2:
       return FileResponse(f"{FRONTEND}/views/room.html")
    return RedirectResponse(url="/waiting")
 
@@ -218,6 +220,7 @@ def leave_room( request: Request):
    request.session["user_session_id"] = str(uuid.uuid4())
    request.session["user_session_role"] = None
    request.session["user_session_room"] = None
+   request.session["user_session_game_id"] = None
    return RedirectResponse(url="/")
 
 @app.get("/rooms")
@@ -306,12 +309,15 @@ def join_room(body: Join, request: Request, user_session_id=Depends(ensure_sessi
    cursor.execute(f"INSERT INTO {PLAYERS_DB}('player_id', 'room_id', 'role', 'sentence') VALUES (?, ?, ?, ?)", (user_session_id, body.roomNumber, body.role.value, SENTENCES_TRIMED[body.roomNumber]))
    request.session["user_session_role"] = body.role.value
    request.session["user_session_room"] = body.roomNumber
+   request.session["user_session_game_id"] = None
 
    redirect = "/waiting"
    cursor.execute(f"SELECT COUNT(player_id) AS player_count FROM {PLAYERS_DB} WHERE room_id = (?)", (body.roomNumber,))
    room_data = cursor.fetchone()
 
    if room_data["player_count"] == 2:
+      game_id = str(uuid.uuid4())
+      cursor.execute(f"UPDATE {PLAYERS_DB} SET game_id = (?) WHERE room_id = (?)", (game_id, body.roomNumber))
       redirect = "/room"
 
    return { "code": "REDIRECT", "data": redirect }
@@ -349,7 +355,17 @@ def send_sentence(body: Amount_of_skips, request: Request, user_session_id=Depen
 
 # WHAT ROLE IS HE PLAYING
 @app.post("/room/role", status_code=200)
-def send_role(request: Request, user_session_id=Depends(check_session)):
+def send_role(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+   cursor = conn.cursor()
+   cursor.execute(
+      f"SELECT game_id FROM {PLAYERS_DB} WHERE player_id = (?)",
+      (user_session_id,)
+   )
+   row = cursor.fetchone()
+   if row is None:
+      raise HTTPException(status_code=404, detail="Player not found")
+   request.session["user_session_game_id"] = row["game_id"]
+
    return { "code": "ok", "data": request.session["user_session_role"] }
 
 # SENDS WORDS/SENTENCE TO USER
@@ -370,19 +386,14 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
       raise HTTPException(status_code=404, detail="Room not found")
    start_time = row["game_start_time"]
    cursor.execute(
-      f"SELECT word_one, word_two, word_three, word_four, word_five  FROM {ROOMS_DB} WHERE id = (?)",
-      (request.session["user_session_room"],)
+      f"SELECT word_one, word_two, word_three, word_four, word_five  FROM {RESULTS_DB} WHERE game_id = (?)",
+      (request.session["user_session_game_id"],)
    )
    words_time = cursor.fetchone()
 
-   if words_time["word_four"] is not None:
-      start_time = words_time["word_four"]
-   elif words_time["word_three"] is not None:
-      start_time = words_time["word_three"]
-   elif words_time["word_two"] is not None:
-      start_time = words_time["word_two"]
-   elif words_time["word_one"] is not None:
-      start_time = words_time["word_one"]
+   for i in range(5):
+      if words_time[i] is not None:
+         start_time = words_time[i]
 
    return { "code": "ok", "data": start_time }
 
@@ -429,10 +440,15 @@ def send_sentence(request: Request, user_session_id=Depends(check_session), conn
       (request.session["user_session_room"],)
    )
    gameReady = cursor.fetchone()
-   if request.session["user_session_role"] == Role.receiver:
+   cursor.execute(
+      f"SELECT game_id FROM {RESULTS_DB} WHERE game_id = (?)",
+      (request.session["user_session_game_id"],)
+   )
+   row = cursor.fetchone()
+   if request.session["user_session_role"] == Role.receiver and row is None:
       cursor.execute(
-         f"INSERT OR IGNORE INTO {RESULTS_DB} (receiver_id, room_id, sentence) VALUES (?,?,?)", 
-         (user_session_id,request.session["user_session_room"], SENTENCES[request.session["user_session_room"]])
+         f"INSERT OR IGNORE INTO {RESULTS_DB} (game_id, room_id, sentence, start_time) VALUES (?,?,?,?)", 
+         (request.session["user_session_game_id"], request.session["user_session_room"], SENTENCES[request.session["user_session_room"]], int(time.time()* 1000 + TIME_FOR_LOADING))
       )
    if isReady["ready"] == 1 and gameReady["game_started"] != 1:
       cursor.execute(
@@ -446,7 +462,7 @@ class Word(BaseModel):
 
 # UPDATES RESULTS WITH TIME ON EACH WORD
 @app.post("/room/word", status_code=200)
-def send_sentence(body: Word,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+def send_sentence(body: Word, request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
    word_time = int((time.time() * 1000 + 3000))
    word_index = "one"
@@ -456,8 +472,8 @@ def send_sentence(body: Word,request: Request, user_session_id=Depends(check_ses
    elif body.index == 4: word_index = "five"
 
    cursor.execute(
-      f"UPDATE {RESULTS_DB} SET word_{word_index} = (?) WHERE receiver_id = (?)", 
-      (word_time, user_session_id)
+      f"UPDATE {RESULTS_DB} SET word_{word_index} = (?) WHERE game_id = (?)", 
+      (word_time, request.session["user_session_game_id"])
    )
    return { "code": "ok" }
 
@@ -468,17 +484,14 @@ class Team_name(BaseModel):
 def send_sentence(body: Team_name,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
    cursor.execute(
-      f"UPDATE {RESULTS_DB} SET team_name WHERE receiver_id = (?)", 
-      (body.teamName, user_session_id)
+      f"UPDATE {RESULTS_DB} SET team_name = (?) WHERE game_id = (?)", 
+      (body.teamName, request.session["user_session_game_id"])
    )
    return { "code": "ok" }
 
-
-
-
 # CHECKS IF GAME WAS FINISHED AND UPDATES RESULTS
 @app.post("/room/finish", status_code=200)
-def send_sentence(body: Team_name,request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
+def send_sentence(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
    cursor.execute(
       f"SELECT correct_guesses, sentence FROM {PLAYERS_DB} WHERE room_id = (?) AND role = 'receiver'",
@@ -493,10 +506,10 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
    )
    count_errors = cursor.fetchone()
    print(count_errors["errors"])
-   no_errors = True if count_errors["errors"] == 0 else False
+   no_errors = True if count_errors["errors"] < 3 else False
    cursor.execute(
-      f"SELECT word_one, word_two, word_three, word_four, word_five FROM {RESULTS_DB} WHERE receiver_id = (?)",
-      (user_session_id,)
+      f"SELECT start_time, word_one, word_two, word_three, word_four, word_five FROM {RESULTS_DB} WHERE game_id = (?)",
+      (request.session["user_session_game_id"],)
    )
    words = cursor.fetchone()
    if words is None:
@@ -504,13 +517,15 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
    
    correct_words = SENTENCES[request.session["user_session_room"]].split(" ")
    in_time = True
-   for i in range(5):
-      if words[i] > int(len(correct_words[i]) * TIME_PER_LETTER):
+   for i in range(1,6):
+      if words[i] is None:
+         continue
+      if  words[i] - words[i - 1] > int(len(correct_words[i - 1]) * TIME_PER_LETTER):
          in_time = False
 
    if request.session["user_session_role"] == Role.sender:
-      cursor.execute(f"UPDATE {RESULTS_DB} SET room_id = ?, point_no_error = ?, point_time = ? WHERE receiver_id = (?)", 
-         (request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, user_session_id)
+      cursor.execute(f"UPDATE {RESULTS_DB} SET room_id = ?, point_no_error = ?, point_time = ? WHERE game_id = (?)", 
+         (request.session["user_session_room"], 1 if no_errors else 0, 1 if in_time else 0, request.session["user_session_game_id"])
       )
    cursor.execute(
       f"UPDATE {PLAYERS_DB} SET ready = 0 WHERE player_id = (?)", 
@@ -522,9 +537,6 @@ def send_sentence(body: Team_name,request: Request, user_session_id=Depends(chec
 @app.post("/room/restart", status_code=200)
 def restart(request: Request, user_session_id=Depends(check_session), conn: sqlite3.Connection = Depends(get_db_access)):
    cursor = conn.cursor()
-   cursor.execute(f"DELETE FROM {PLAYERS_DB} WHERE player_id = (?)", 
-      (request.session["user_session_room"],)
-   )
    cursor.execute(f'''
       UPDATE {ROOMS_DB}
       SET last_join_time = {int(time.time()* 1000)}, game_started = 0
@@ -533,11 +545,16 @@ def restart(request: Request, user_session_id=Depends(check_session), conn: sqli
          WHERE player_id = ?
       )
    ''', (user_session_id,))
-   request.session["user_session_id"] = str(uuid.uuid4())
-   cursor.execute(
-      f"UPDATE {PLAYERS_DB} SET player_id = (?), correct_guesses = 0, incorrect_guesses = 0 WHERE player_id = (?)", 
-      (request.session["user_session_id"], user_session_id )
+   cursor.execute(f"DELETE FROM {PROGRESS_DB} WHERE player_id = (?)", 
+      (user_session_id,)
    )
+   cursor.execute(f"DELETE FROM {PLAYERS_DB} WHERE player_id = (?)", 
+      (user_session_id,)
+   )
+   request.session["user_session_id"] = str(uuid.uuid4())
+   request.session["user_session_role"] = None
+   request.session["user_session_room"] = None
+   request.session["user_session_game_id"] = None
    return {"code": "ok"}
 
 class Guess(BaseModel):

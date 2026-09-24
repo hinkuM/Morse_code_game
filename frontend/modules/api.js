@@ -117,12 +117,11 @@ export function isReady() {
    )
 }
 
-export function finish(teamName) {
+export function finish() {
    return apiRequester(
       {
          method: "POST",
          url: "/room/finish",
-         data: { teamName: teamName ?? "" },
          contentType: "application/json",
          success: (response) => {
             return response

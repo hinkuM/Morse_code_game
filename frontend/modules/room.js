@@ -5,7 +5,7 @@ import {
 
 const terminalContainer = document.getElementById("content")
 const HUMAN_SPEED = 50 //ms
-const TIME_PER_LETTER_SECONDS = 12
+const TIME_PER_LETTER_SECONDS = 20
 const MORSE_TRANSLATION = [
    { letter: "A", morse: "•᠆" },
    { letter: "B", morse: "᠆•••" },
@@ -40,9 +40,9 @@ const ROLES = Object.freeze({
    RECEIVER: "receiver"
 })
 const TIMINGS = Object.freeze({
-   DOT: 250,
-   DASH: 750,
-   PAUSE: 200,
+   DOT: 325,
+   DASH: 1000,
+   PAUSE: 250,
 })
 const USER_ROLE = await role()
 let secondPlayerProgress = null
@@ -52,9 +52,9 @@ let previousWordsLength = null
 
 
 const READY_TIMER = 1000 * 10
-const TIME_BEFORE_SKIP_TUTORIAL = 10 // 3000
-const BASIC_TYPING_SPEED = 0 //18
-const MULTI_TYPING_SPEED = 1 //20
+const TIME_BEFORE_SKIP_TUTORIAL = 3000
+const BASIC_TYPING_SPEED = 18
+const MULTI_TYPING_SPEED = 20
 
 
 const CURRENT_STAGE = await skips(0)
@@ -80,7 +80,25 @@ let errorIndicatorTimeout
 let clearBadSender
 let barInterval
 let lastBadInput = 0
-let lastInput = ""
+
+function fillPaper() {
+   if (USER_ROLE === ROLES.RECEIVER) {
+      const text = ["Enter - zatwierdź", "Backspace - usuń"]
+      for (let i = 0; i < text.length; i++) {
+         const t = document.createElement("p")
+         t.innerText = text[i]
+         document.querySelector(".paper").append(t)
+      }
+   } else if (USER_ROLE === ROLES.SENDER) {
+      const text = ["Zielony - zatwierdź", "Czerwony - usuń"]
+      for (let i = 0; i < text.length; i++) {
+         const t = document.createElement("p")
+         t.innerText = text[i]
+         document.querySelector(".paper").append(t)
+      }
+   }
+}
+fillPaper()
 
 function popUp({ x, y, titl, txt, height, width }) {
    const background = document.createElement("div")
@@ -107,10 +125,10 @@ function popUp({ x, y, titl, txt, height, width }) {
    return background
 }
 
-function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
+function LetterPlaceholder({ word, tutorial = undefined } = {}) {
    const container = document.createElement("section")
    container.setAttribute("id", "word")
-   if (role === ROLES.SENDER) {
+   if (USER_ROLE === ROLES.SENDER) {
       const pointer = document.createElementNS("http://www.w3.org/2000/svg", "svg")
       const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline")
       pointer.setAttribute("id", "word-pointer")
@@ -123,19 +141,18 @@ function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
    for (let i = 0; i < word.length; i++) {
       const input = document.createElement("input")
       input.classList.add("placeholder", "ready")
-      input.placeholder = role === ROLES.SENDER ? word[i].toUpperCase() : ""
+      input.placeholder = USER_ROLE === ROLES.SENDER ? word[i].toUpperCase() : ""
 
       input.addEventListener("focus", (e) => {
          input.classList.remove("active")
          if (currentLetterIndex.letter != i || blockInput) return input.blur()
          input.classList.add("active")
-         if (role === ROLES.SENDER || tutorial?.disable) return input.blur()
+         if (USER_ROLE === ROLES.SENDER || tutorial?.disable) return input.blur()
       })
       input.addEventListener("blur", (e) => {
-         if (role === ROLES.SENDER || tutorial?.disable) return
+         if (USER_ROLE === ROLES.SENDER || tutorial?.disable) return
          input.classList.remove("active")
          if (currentLetterIndex.letter === i && !blockInput) {
-            console.log("MEMEMEME1");
             return input.focus()
          }
       })
@@ -146,35 +163,34 @@ function LetterPlaceholder({ role, word, tutorial = undefined } = {}) {
          if (blockInput) { input.blur(); return input.value = "" }
          const value = input.value
          const letter = value.slice(-1)
-         lastInput = letter
          if (value.length <= 0) {
             return
          }
          if (value.length > 1) {
             input.value = letter
          }
-
-         if (!currentLetterIndex.ready) {
-            return console.log("inactive");
-         }
-         const result = await onLetterInput(role, letter, word, tutorial)
+         if (!currentLetterIndex.ready) return
+         const result = await onLetterInput(USER_ROLE, letter, word, tutorial)
          clearTimeout(clearBadSender)
          if (result) {
             input.classList.add("correct")
             input.classList.remove("active")
+            input.value = letter
             input.blur()
-            if (role === ROLES.SENDER && tutorial) {
+            if (USER_ROLE === ROLES.SENDER && tutorial) {
                setTimeout(() => {
                   const pointer = document.getElementById("word-pointer")
                   pointer.style.left = `${30 + currentLetterIndex.letter * (60 + 10) - 8}px`
                }, 1000)
             }
-            if (document.getElementById("word") && currentLetterIndex.letter < MAX_LENGTH && tutorial) {
+            if (document.getElementById("word") && currentLetterIndex.letter < MAX_LENGTH && (USER_ROLE === ROLES.SENDER || tutorial)) {
                document.querySelectorAll(".placeholder")[currentLetterIndex.letter].focus()
             }
+            document.querySelectorAll(".placeholder")[0].classList.remove("active")
          } else {
             lastBadInput = Date.now()
             input.classList.remove("ready")
+            clearTimeout(errorIndicatorTimeout)
             errorIndicatorTimeout = setTimeout(() => {
                input.classList.add("ready")
             }, 100)
@@ -221,8 +237,8 @@ async function endGame() {
             x: -1, y: -1,
             width: 360,
             height: 350,
-            titl: data.point_time === 1 ? "Gratulacje, uratowaliście wszystkie próbki" : "Niestety nie udało się uratować wszystkich próbek",
-            txt: data.point_no_error === 1 ? "Nie przegrzaliście wszystkich serwerów!" : "Wszystkie serwery zostały przegrzane :(",
+            titl: data.in_time ? "Gratulacje, uratowaliście wszystkie próbki" : "Niestety nie udało się uratować wszystkich próbek",
+            txt: data.no_errors ? "Nie przegrzaliście wszystkich serwerów!" : "Wszystkie serwery zostały przegrzane :(",
          })
          terminalContainer.append(container)
          terminalContainer.classList.add("end-game")
@@ -233,8 +249,8 @@ async function endGame() {
          x: -1, y: -1,
          width: 360,
          height: 350,
-         titl: data.point_time === 1 ? "Gratulacje, uratowaliście wszystkie próbki" : "Niestety nie udało się uratować wszystkich próbek",
-         txt: data.point_no_error === 1 ? "Nie przegrzaliście wszystkich serwerów!" : "Wszystkie serwery zostały przegrzane :(",
+         titl: data.in_time ? "Gratulacje, uratowaliście wszystkie próbki" : "Niestety nie udało się uratować wszystkich próbek",
+         txt: data.no_errors ? "Nie przegrzaliście wszystkich serwerów!" : "Wszystkie serwery zostały przegrzane :(",
       })
       terminalContainer.append(container)
       terminalContainer.classList.add("end-game")
@@ -259,7 +275,7 @@ function finishWord(cb) {
    clearInterval(barInterval)
    const main = document.getElementById("main")
    const word = document.getElementById("word")
-   word.style.opacity = 0
+   if (word) word.style.opacity = 0
    const correctMark = document.createElementNS("http://www.w3.org/2000/svg", "svg")
    const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline")
    correctMark.setAttribute("id", "main-mark")
@@ -286,6 +302,10 @@ class Game {
       this.timeouts = []
    }
 
+   getTimeouts() {
+      return this.timeouts
+   }
+
    async start() {
       clearInterval(progressTracker)
       this.words = (await sentence()).split(" ")
@@ -306,19 +326,18 @@ class Game {
             sumOfWords += currentLetterIndex.letter
          }
       }
-      secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
       wordsLengths = this.words.slice(0, currentLetterIndex.word).map((el) => el.length)
       previousWordsLength = wordsLengths.length > 0 ? wordsLengths.reduce((a, b) => a + b) : 0
+      secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
 
       setTimeout(async () => {
          await this.round()
       }, this.serverTime - Date.now() > 0 ? this.serverTime - Date.now() : 0)
 
       progressTracker = setInterval(async () => {
-         secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
          wordsLengths = this.words.slice(0, currentLetterIndex.word).map((el) => el.length)
          previousWordsLength = wordsLengths.length > 0 ? wordsLengths.reduce((a, b) => a + b) : 0
-
+         secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
 
          // moves pointer on sender
          if (USER_ROLE === ROLES.SENDER && document.getElementById("word-pointer")) {
@@ -386,8 +405,6 @@ class Game {
       }
       if (!previous) return
       const checkIfNextWord = setInterval(() => {
-         console.log(secondPlayerProgress, previousWordsLength);
-
          if (secondPlayerProgress === previousWordsLength) {
             finishWord(() => {
                gameControls.round()
@@ -488,12 +505,14 @@ class Game {
    }
 
    async mainBuilder(tutorial) {
+      if (AMOUNT_OF_WORDS === currentLetterIndex.word && !tutorial) {
+         finishWord(endGame)
+      }
       const word = tutorial?.text ?? (secondPlayerProgress < previousWordsLength && currentLetterIndex.letter === 0 ? this.words[currentLetterIndex.word - 1] : this.words[currentLetterIndex.word])
 
       MAX_LENGTH = word.length
       document.getElementById("main").innerText = ""
       document.getElementById("main").append(LetterPlaceholder({
-         role: USER_ROLE,
          word,
          tutorial
       }))
@@ -682,7 +701,7 @@ class Game {
    }
 
    async playTutorial() {
-      const word = "ukenium".toUpperCase()
+      const word = "ee".toUpperCase()
       AMOUNT_OF_WORDS = 1
       await this.mainBuilder({ text: word })
       document.querySelectorAll(".placeholder")[0].focus()
@@ -703,17 +722,16 @@ class Game {
    }
 
    playMessage(letter, force) {
-      console.log(letter, this.letter, "RAAH");
-
       if (!document.getElementById("lights-message")) return
       const messageLight = document.getElementById("lights-message")
       if (this.playing && !force) return
+      messageLight.classList.remove("on")
+      this.playing = true
       for (const timeout of this.timeouts) {
+         messageLight.classList.remove("on")
          clearTimeout(timeout)
          this.timeouts = this.timeouts.filter((el) => el != timeout)
       }
-      this.playing = true
-      messageLight.classList.remove("on")
       const lightTimeout = setTimeout(() => {
          messageLight.classList.add("on")
       }, 400)
@@ -733,11 +751,11 @@ class Game {
       for (const time of blinking) {
          const timeout = setTimeout(() => {
             morseLight.classList.add("on")
-            const a = setTimeout(() => {
-               morseLight.classList.remove("on")
-            }, time)
-            this.timeouts.push(a)
          }, counter)
+         const a = setTimeout(() => {
+            morseLight.classList.remove("on")
+         }, counter + time)
+         this.timeouts.push(a)
          this.timeouts.push(timeout)
          counter += time + TIMINGS.PAUSE
       }
@@ -779,9 +797,6 @@ class Game {
 
       const onePercentage = time / 100
       const substractTime = (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0) < -100 ? -100 : (this.serverTime > 0 ? Math.ceil((this.serverTime - Date.now()) / time * 100) : 0)
-      console.log(substractTime);
-
-
       let currentWidth = 100 + substractTime
       clearInterval(barInterval)
       {
@@ -890,7 +905,6 @@ class tutorialText {
       this.word = "test".toUpperCase()
       const main = document.getElementById("main")
       main.append(LetterPlaceholder({
-         role: USER_ROLE,
          word: this.word,
          tutorial: { text: this.word, disable: true }
       }))
@@ -974,7 +988,7 @@ class tutorialText {
          ...(USER_ROLE === ROLES.RECEIVER ?
             {
                titl: "Tak wygląda litera 'K' w kodzie Morse'a",
-               txt: "• ᠆ •"
+               txt: "᠆ • ᠆"
             }
             :
             {
@@ -983,14 +997,12 @@ class tutorialText {
             })
       })
       if (USER_ROLE === ROLES.RECEIVER) {
-         setTimeout(() => {
-            this.tutorialSignal = setInterval(async () => {
-               gameControls.playMessage("K")
-            }, 500)
-         }, 1000)
+         progressTracker = setInterval(() => {
+            gameControls.playMessage("K")
+         }, 500)
       } else if (USER_ROLE === ROLES.SENDER) {
          this.singalFunc()
-         this.tutorialSignal = setInterval(async () => {
+         progressTracker = setInterval(() => {
             this.singalFunc()
          }, 1000 + 1000 + TIMINGS.DASH + TIMINGS.DOT * 2)
       }
@@ -1004,12 +1016,12 @@ class tutorialText {
          return terminalContainer.classList.add("signal-two-tutorial")
       }
       this.lastSkip = Date.now()
-      clearInterval(this.tutorialSignal)
+      clearInterval(progressTracker)
       this.clearTimeouts()
       document.getElementById("lights").style.zIndex = 0
       document.getElementById("main").style.zIndex = 4
       const container = popUp({
-         x: -1, y: 450,
+         x: -1, y: 470,
          height: 350,
          width: 360,
          titl: "Powyżej będą znajdować się odszyfrowane litery, które wpiszesz",
@@ -1074,7 +1086,7 @@ class tutorialText {
       this.lastSkip = Date.now()
       clearInterval(this.tutorialSignal)
       const container = popUp({
-         x: -1, y: 450,
+         x: -1, y: 470,
          height: 360,
          width: 360,
          titl: "Każda litera to osobna instrukcja dla komputera",
@@ -1096,7 +1108,7 @@ class tutorialText {
       clearInterval(this.mainAnim)
       this.clearTimeouts()
       const container = popUp({
-         x: -1, y: 450,
+         x: -1, y: 460,
          height: 420,
          width: 360,
          titl: "Po wysłaniu pierwszej litery drugi zespół będzie mógł zacząć pracę",
@@ -1293,7 +1305,7 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
    if (currentLetterIndex.letter > MAX_LENGTH) return
    if (role === ROLES.SENDER) {
       const isCorrect = letter.toUpperCase() === word[currentLetterIndex.letter].toUpperCase()
-      if (!tutorial) senderGuess(isCorrect)
+      if (!tutorial) await senderGuess(isCorrect)
       if (!isCorrect) return false
    }
    if (role === ROLES.RECEIVER) {
@@ -1303,6 +1315,7 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
       currentLetterIndex.ready = true
       if (!result) return false
    }
+   secondPlayerProgress = (await progress())[USER_ROLE === ROLES.SENDER ? ROLES.RECEIVER : ROLES.SENDER]
 
    currentLetterIndex.letter += 1
    if (currentLetterIndex.letter === MAX_LENGTH) {
@@ -1311,6 +1324,8 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
       if (currentLetterIndex.word !== AMOUNT_OF_WORDS) {
          if (USER_ROLE === ROLES.SENDER) {
             const checkIfNextWord = setInterval(() => {
+               console.log(secondPlayerProgress, previousWordsLength);
+
                if (secondPlayerProgress === previousWordsLength) {
                   finishWord(() => {
                      gameControls.round()
@@ -1319,6 +1334,13 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
                }
             }, 500)
          } else if (USER_ROLE === ROLES.RECEIVER) {
+            const timeouts = gameControls.getTimeouts()
+            document.getElementById("lights-message").classList.remove("on")
+            document.getElementById("lights-morse").classList.remove("on")
+            for (const timeout of timeouts) {
+               document.getElementById("lights-message").classList.remove("on")
+               clearTimeout(timeout)
+            }
             finishWord(() => {
                gameControls.round()
             })
@@ -1327,19 +1349,24 @@ async function onLetterInput(role, letter, word, tutorial = undefined) {
       }
    }
    if (currentLetterIndex.word === AMOUNT_OF_WORDS) {
-      if (role === ROLES.SENDER) tutorial ? finishWord(endTutorial) : () => {
+      if (role === ROLES.SENDER) tutorial ? finishWord(endTutorial) : (() => {
          const checkIfNextWord = setInterval(() => {
-            if (secondPlayerProgress === previousWordsLength) {
+            console.log(secondPlayerProgress, previousWordsLength);
+            if (secondPlayerProgress >= previousWordsLength) {
                finishWord(() => {
                   endGame()
                })
                clearInterval(checkIfNextWord)
             }
          }, 500)
-      }
+      })()
 
 
-      if (role === ROLES.RECEIVER) tutorial ? finishWord(endTutorial) : finishWord(endGame)
+      if (role === ROLES.RECEIVER) tutorial ? finishWord(endTutorial) : (() => {
+         saveWordTime(currentLetterIndex.word - 1)
+         finishWord(endGame)
+      })()
+
    }
 
    return true
@@ -1515,7 +1542,7 @@ function powerTerminal(onStart) {
 
 const tutorialControler = new tutorialText()
 const allEvents = new Map([
-   ["ready-lore", () => {
+   ["ready-lore", async () => {
       terminalContainer.classList.remove("ready-lore")
       startTyping(USER_ROLE === ROLES.RECEIVER ? tutorialLoadingTextReceiver : tutorialLoadingTextSender, "ready-tutorial")
    }],
