@@ -194,7 +194,7 @@ function LetterPlaceholder({ word, tutorial = undefined } = {}) {
             errorIndicatorTimeout = setTimeout(() => {
                input.classList.add("ready")
             }, 100)
-            if (role === ROLES.SENDER) {
+            if (USER_ROLE === ROLES.SENDER) {
                clearBadSender = setTimeout(() => {
                   input.value = ""
                }, 1500)
@@ -719,6 +719,9 @@ class Game {
       if (USER_ROLE === ROLES.SENDER) {
          this.senderEvents()
       }
+      for (const node of document.querySelectorAll(".scoring-icons")) {
+         node.classList.add("hidden")
+      }
    }
 
    playMessage(letter, force) {
@@ -1142,7 +1145,13 @@ class tutorialText {
    }
    translation() {
       if (Date.now() - this.lastSkip < TIME_BEFORE_SKIP_TUTORIAL) {
-         return terminalContainer.classList.add("main-two-tutorial")
+         if (USER_ROLE === ROLES.SENDER) {
+            return terminalContainer.classList.add("main-three-tutorial")
+
+         } else if (USER_ROLE === ROLES.RECEIVER) {
+            return terminalContainer.classList.add("main-two-tutorial")
+
+         }
       }
       this.lastSkip = Date.now()
       clearInterval(this.mainTriangle)

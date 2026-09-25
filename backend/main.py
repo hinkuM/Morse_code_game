@@ -3,10 +3,10 @@
 # GLOBAL VARIABLES
 API_BASE = "/api"
 SENTENCES = [
-   "ee bb dd".lower(),
-   "Azerbejdzan me explode fast us".lower(),
-   "This IS working".lower(),
-   "Cosmic theme game mhm".lower()
+   "Kobalt Uran Pluton Polon".lower(),
+   "Ameryk Techent Cez Uranium".lower(),
+   "Uran Ukenium Kobalt Rad".lower(),
+   "Jod Kobalt Ameryk Polon".lower()
 ]
 SENTENCES_TRIMED = [sentence.replace(" ", "") for sentence in SENTENCES]
 NUMBER_OF_ROOMS = 4
